@@ -5,6 +5,8 @@ from abc import abstractmethod, ABCMeta
 from scapy.layers.l2 import Ether, Raw
 from scapy.layers.inet import IP, UDP
 
+from util import ip4_range
+
 
 class BridgeDomain(object):
     """ Bridge domain abstraction """
@@ -73,11 +75,9 @@ class BridgeDomain(object):
 
         self.pg_start()
 
-        # Pick first received frame and check if it's the non-encapsulated frame
-        out = self.pg1.get_capture()
-        self.assertEqual(len(out), 1,
-                         'Invalid number of packets on '
-                         'output: {}'.format(len(out)))
+        # Pick first received frame and check if it's the non-encapsulated
+        # frame
+        out = self.pg1.get_capture(1)
         pkt = out[0]
         self.assert_eq_pkts(pkt, self.frame_request)
 
@@ -93,10 +93,7 @@ class BridgeDomain(object):
         self.pg_start()
 
         # Pick first received frame and check if it's corectly encapsulated.
-        out = self.pg0.get_capture()
-        self.assertEqual(len(out), 1,
-                         'Invalid number of packets on '
-                         'output: {}'.format(len(out)))
+        out = self.pg0.get_capture(1)
         pkt = out[0]
         self.check_encapsulation(pkt, self.single_tunnel_bd)
 
@@ -115,10 +112,7 @@ class BridgeDomain(object):
         self.pg_start()
 
         # Get packet from each tunnel and assert it's corectly encapsulated.
-        out = self.pg0.get_capture()
-        self.assertEqual(len(out), 10,
-                         'Invalid number of packets on '
-                         'output: {}'.format(len(out)))
+        out = self.pg0.get_capture(self.n_ucast_tunnels)
         for pkt in out:
             self.check_encapsulation(pkt, self.ucast_flood_bd, True)
             payload = self.decapsulate(pkt)
@@ -136,19 +130,12 @@ class BridgeDomain(object):
         self.pg_start()
 
         # Pick first received frame and check if it's corectly encapsulated.
-        out = self.pg0.get_capture()
-        self.assertEqual(len(out), 1,
-                         'Invalid number of packets on '
-                         'output: {}'.format(len(out)))
+        out = self.pg0.get_capture(1)
         pkt = out[0]
         self.check_encapsulation(pkt, self.mcast_flood_bd, True)
 
         payload = self.decapsulate(pkt)
         self.assert_eq_pkts(payload, self.frame_reply)
-
-    @staticmethod
-    def ipn_to_ip(ipn):
-        return '.'.join(str(i) for i in bytearray(ipn))
 
     def test_mcast_rcv(self):
         """ Multicast receive test
@@ -159,16 +146,12 @@ class BridgeDomain(object):
         ip_range_start = 10
         ip_range_end = 30
         mcast_stream = [
-            self.encap_mcast(self.frame_request, self.ipn_to_ip(ip), mac,
-                             self.mcast_flood_bd)
-            for ip in self.ip4_range(self.pg0.remote_ip4n,
-                                     ip_range_start, ip_range_end)]
+            self.encap_mcast(self.frame_request, ip, mac, self.mcast_flood_bd)
+            for ip in ip4_range(self.pg0.remote_ip4,
+                                ip_range_start, ip_range_end)]
         self.pg0.add_stream(mcast_stream)
         self.pg2.enable_capture()
         self.pg_start()
-        out = self.pg2.get_capture()
-        self.assertEqual(len(out), 10,
-                         'Invalid number of packets on '
-                         'output: {}'.format(len(out)))
+        out = self.pg2.get_capture(10)
         for pkt in out:
             self.assert_eq_pkts(pkt, self.frame_request)

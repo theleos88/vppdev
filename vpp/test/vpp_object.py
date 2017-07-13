@@ -1,12 +1,11 @@
+""" abstract vpp object and object registry """
+
 from abc import ABCMeta, abstractmethod
 
 
 class VppObject(object):
     """ Abstract vpp object """
     __metaclass__ = ABCMeta
-
-    def __init__(self):
-        VppObjectRegistry().register(self)
 
     @abstractmethod
     def add_vpp_config(self):
@@ -42,13 +41,20 @@ class VppObjectRegistry(object):
         if not hasattr(self, "_object_dict"):
             self._object_dict = dict()
 
-    def register(self, o):
+    def register(self, obj, logger):
         """ Register an object in the registry. """
-        if not o.unique_id() in self._object_dict:
-            self._object_registry.append(o)
-            self._object_dict[o.unique_id()] = o
+        if obj.object_id() not in self._object_dict:
+            self._object_registry.append(obj)
+            self._object_dict[obj.object_id()] = obj
+            logger.debug("REG: registering %s" % obj)
         else:
-            print "not adding duplicate %s" % o
+            logger.debug("REG: duplicate add, ignoring (%s)" % obj)
+
+    def unregister_all(self, logger):
+        """ Remove all object registrations from registry. """
+        logger.debug("REG: removing all object registrations")
+        self._object_registry = []
+        self._object_dict = dict()
 
     def remove_vpp_config(self, logger):
         """
@@ -56,24 +62,26 @@ class VppObjectRegistry(object):
         from the registry.
         """
         if not self._object_registry:
-            logger.info("No objects registered for auto-cleanup.")
+            logger.info("REG: No objects registered for auto-cleanup.")
             return
-        logger.info("Removing VPP configuration for registered objects")
-        for o in reversed(self._object_registry):
-            if o.query_vpp_config():
-                logger.info("Removing %s", o)
-                o.remove_vpp_config()
+        logger.info("REG: Removing VPP configuration for registered objects")
+        # remove the config in reverse order as there might be dependencies
+        for obj in reversed(self._object_registry):
+            if obj.query_vpp_config():
+                logger.info("REG: Removing configuration for %s" % obj)
+                obj.remove_vpp_config()
             else:
-                logger.info("Skipping %s, configuration not present", o)
+                logger.info(
+                    "REG: Skipping removal for %s, configuration not present" %
+                    obj)
         failed = []
-        for o in self._object_registry:
-            if o.query_vpp_config():
-                failed.append(o)
-        self._object_registry = []
-        self._object_dict = dict()
+        for obj in self._object_registry:
+            if obj.query_vpp_config():
+                failed.append(obj)
+        self.unregister_all(logger)
         if failed:
-            logger.error("Couldn't remove configuration for object(s):")
-            for x in failed:
-                logger.error(repr(x))
+            logger.error("REG: Couldn't remove configuration for object(s):")
+            for obj in failed:
+                logger.error(repr(obj))
             raise Exception("Couldn't remove configuration for object(s): %s" %
                             (", ".join(str(x) for x in failed)))

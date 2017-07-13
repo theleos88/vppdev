@@ -16,11 +16,15 @@ vpp_arch = native
 ifeq ($(shell uname -m),x86_64)
 vpp_march = corei7			# Nehalem Instruction set
 vpp_mtune = corei7-avx			# Optimize for Sandy Bridge
-vpp_dpdk_arch = corei7
+else ifeq ($(shell uname -m),aarch64)
+ifeq ($(TARGET_PLATFORM),thunderx)
+vpp_march = armv8-a+crc
+vpp_mtune = thunderx
+vpp_dpdk_target = arm64-thunderx-linuxapp-gcc
 else
 vpp_march = native
 vpp_mtune = generic
-vpp_dpdk_arch = native
+endif
 endif
 vpp_native_tools = vppapigen
 
@@ -29,19 +33,11 @@ vpp_uses_dpdk = yes
 # Uncoment to enable building unit tests
 # vpp_enable_tests = yes
 
-vpp_root_packages = vpp vlib vlib-api vnet svm vpp-api-test \
-	vpp-api gmod plugins
-
-vpp_configure_args_vpp = --with-dpdk
-vnet_configure_args_vpp = --with-dpdk
-
-# Set these parameters carefully. The vlib_buffer_t is 128 bytes, i.e.
-vlib_configure_args_vpp = --with-pre-data=128
-
-plugins_configure_args_vpp = --with-dpdk
+vpp_root_packages = vpp gmod
 
 # DPDK configuration parameters
-# vpp_uses_dpdk_cryptodev = yes
+# vpp_uses_dpdk_cryptodev_sw = yes
+# vpp_uses_dpdk_mlx5_pmd = yes
 # vpp_uses_external_dpdk = yes
 # vpp_dpdk_inc_dir = /usr/include/dpdk
 # vpp_dpdk_lib_dir = /usr/lib
@@ -66,3 +62,9 @@ vpp_gcov_TAG_CFLAGS = -g -O0 -DCLIB_DEBUG -march=$(MARCH) \
 	-fPIC -Werror -fprofile-arcs -ftest-coverage
 vpp_gcov_TAG_LDFLAGS = -g -O0 -DCLIB_DEBUG -march=$(MARCH) \
 	-fPIC -Werror -coverage
+
+vpp_coverity_TAG_CFLAGS = -g -O2 -march=$(MARCH) -mtune=$(MTUNE) \
+	-fPIC -Werror -D__COVERITY__
+vpp_coverity_TAG_LDFLAGS = -g -O2 -march=$(MARCH) -mtune=$(MTUNE) \
+	-fPIC -Werror -D__COVERITY__ 
+

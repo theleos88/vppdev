@@ -6,7 +6,7 @@ from logging import *
 from framework import VppTestCase, VppTestRunner
 from vpp_sub_interface import VppDot1QSubint
 from vpp_gre_interface import VppGreInterface
-from vpp_ip_route import IpRoute, RoutePath
+from vpp_ip_route import VppIpRoute, VppRoutePath
 from vpp_papi_provider import L2_VTR_OP
 
 from scapy.packet import Raw
@@ -39,12 +39,15 @@ class TestGRE(VppTestCase):
 
     def tearDown(self):
         super(TestGRE, self).tearDown()
+        for i in self.pg_interfaces:
+            i.unconfig_ip4()
+            i.unconfig_ip6()
+            i.admin_down()
 
     def create_stream_ip4(self, src_if, src_ip, dst_ip):
         pkts = []
         for i in range(0, 257):
-            info = self.create_packet_info(src_if.sw_if_index,
-                                           src_if.sw_if_index)
+            info = self.create_packet_info(src_if, src_if)
             payload = self.info_to_payload(info)
             p = (Ether(dst=src_if.local_mac, src=src_if.remote_mac) /
                  IP(src=src_ip, dst=dst_ip) /
@@ -59,8 +62,7 @@ class TestGRE(VppTestCase):
                                  src_ip, dst_ip):
         pkts = []
         for i in range(0, 257):
-            info = self.create_packet_info(src_if.sw_if_index,
-                                           src_if.sw_if_index)
+            info = self.create_packet_info(src_if, src_if)
             payload = self.info_to_payload(info)
             p = (Ether(dst=src_if.local_mac, src=src_if.remote_mac) /
                  IP(src=tunnel_src, dst=tunnel_dst) /
@@ -77,8 +79,7 @@ class TestGRE(VppTestCase):
                                  src_ip, dst_ip):
         pkts = []
         for i in range(0, 257):
-            info = self.create_packet_info(src_if.sw_if_index,
-                                           src_if.sw_if_index)
+            info = self.create_packet_info(src_if, src_if)
             payload = self.info_to_payload(info)
             p = (Ether(dst=src_if.local_mac, src=src_if.remote_mac) /
                  IP(src=tunnel_src, dst=tunnel_dst) /
@@ -94,8 +95,7 @@ class TestGRE(VppTestCase):
                                   tunnel_src, tunnel_dst):
         pkts = []
         for i in range(0, 257):
-            info = self.create_packet_info(src_if.sw_if_index,
-                                           src_if.sw_if_index)
+            info = self.create_packet_info(src_if, src_if)
             payload = self.info_to_payload(info)
             p = (Ether(dst=src_if.local_mac, src=src_if.remote_mac) /
                  IP(src=tunnel_src, dst=tunnel_dst) /
@@ -113,8 +113,7 @@ class TestGRE(VppTestCase):
                                     tunnel_src, tunnel_dst, vlan):
         pkts = []
         for i in range(0, 257):
-            info = self.create_packet_info(src_if.sw_if_index,
-                                           src_if.sw_if_index)
+            info = self.create_packet_info(src_if, src_if)
             payload = self.info_to_payload(info)
             p = (Ether(dst=src_if.local_mac, src=src_if.remote_mac) /
                  IP(src=tunnel_src, dst=tunnel_dst) /
@@ -303,8 +302,9 @@ class TestGRE(VppTestCase):
         gre_if.admin_up()
         gre_if.config_ip4()
 
-        route_via_tun = IpRoute(self, "4.4.4.4", 32,
-                                [RoutePath("0.0.0.0", gre_if.sw_if_index)])
+        route_via_tun = VppIpRoute(self, "4.4.4.4", 32,
+                                   [VppRoutePath("0.0.0.0",
+                                                 gre_if.sw_if_index)])
 
         route_via_tun.add_vpp_config()
 
@@ -326,9 +326,9 @@ class TestGRE(VppTestCase):
         #
         # Add a route that resolves the tunnel's destination
         #
-        route_tun_dst = IpRoute(self, "1.1.1.2", 32,
-                                [RoutePath(self.pg0.remote_ip4,
-                                           self.pg0.sw_if_index)])
+        route_tun_dst = VppIpRoute(self, "1.1.1.2", 32,
+                                   [VppRoutePath(self.pg0.remote_ip4,
+                                                 self.pg0.sw_if_index)])
         route_tun_dst.add_vpp_config()
 
         #
@@ -342,7 +342,7 @@ class TestGRE(VppTestCase):
         self.pg_enable_capture(self.pg_interfaces)
         self.pg_start()
 
-        rx = self.pg0.get_capture()
+        rx = self.pg0.get_capture(len(tx))
         self.verify_tunneled_4o4(self.pg0, rx, tx,
                                  self.pg0.local_ip4, "1.1.1.2")
 
@@ -361,7 +361,7 @@ class TestGRE(VppTestCase):
         self.pg_enable_capture(self.pg_interfaces)
         self.pg_start()
 
-        rx = self.pg0.get_capture()
+        rx = self.pg0.get_capture(len(tx))
         self.verify_decapped_4o4(self.pg0, rx, tx)
 
         #
@@ -426,7 +426,7 @@ class TestGRE(VppTestCase):
         self.pg_enable_capture(self.pg_interfaces)
         self.pg_start()
 
-        rx = self.pg0.get_capture()
+        rx = self.pg0.get_capture(len(tx))
         self.verify_decapped_6o4(self.pg0, rx, tx)
 
         #
@@ -458,17 +458,18 @@ class TestGRE(VppTestCase):
         #
         # Add a route via the tunnel - in the overlay
         #
-        route_via_tun = IpRoute(self, "9.9.9.9", 32,
-                                [RoutePath("0.0.0.0", gre_if.sw_if_index)])
+        route_via_tun = VppIpRoute(self, "9.9.9.9", 32,
+                                   [VppRoutePath("0.0.0.0",
+                                                 gre_if.sw_if_index)])
         route_via_tun.add_vpp_config()
 
         #
         # Add a route that resolves the tunnel's destination - in the
         # underlay table
         #
-        route_tun_dst = IpRoute(self, "2.2.2.2", 32, table_id=1,
-                                paths=[RoutePath(self.pg1.remote_ip4,
-                                                 self.pg1.sw_if_index)])
+        route_tun_dst = VppIpRoute(self, "2.2.2.2", 32, table_id=1,
+                                   paths=[VppRoutePath(self.pg1.remote_ip4,
+                                                       self.pg1.sw_if_index)])
         route_tun_dst.add_vpp_config()
 
         #
@@ -483,7 +484,7 @@ class TestGRE(VppTestCase):
         self.pg_enable_capture(self.pg_interfaces)
         self.pg_start()
 
-        rx = self.pg1.get_capture()
+        rx = self.pg1.get_capture(len(tx))
         self.verify_tunneled_4o4(self.pg1, rx, tx,
                                  self.pg1.local_ip4, "2.2.2.2")
 
@@ -503,7 +504,7 @@ class TestGRE(VppTestCase):
         self.pg_enable_capture(self.pg_interfaces)
         self.pg_start()
 
-        rx = self.pg0.get_capture()
+        rx = self.pg0.get_capture(len(tx))
         self.verify_decapped_4o4(self.pg0, rx, tx)
 
         #
@@ -519,12 +520,12 @@ class TestGRE(VppTestCase):
         #
         # Add routes to resolve the tunnel destinations
         #
-        route_tun1_dst = IpRoute(self, "2.2.2.2", 32,
-                                 [RoutePath(self.pg0.remote_ip4,
-                                            self.pg0.sw_if_index)])
-        route_tun2_dst = IpRoute(self, "2.2.2.3", 32,
-                                 [RoutePath(self.pg0.remote_ip4,
-                                            self.pg0.sw_if_index)])
+        route_tun1_dst = VppIpRoute(self, "2.2.2.2", 32,
+                                    [VppRoutePath(self.pg0.remote_ip4,
+                                                  self.pg0.sw_if_index)])
+        route_tun2_dst = VppIpRoute(self, "2.2.2.3", 32,
+                                    [VppRoutePath(self.pg0.remote_ip4,
+                                                  self.pg0.sw_if_index)])
 
         route_tun1_dst.add_vpp_config()
         route_tun2_dst.add_vpp_config()
@@ -564,7 +565,7 @@ class TestGRE(VppTestCase):
         self.pg_enable_capture(self.pg_interfaces)
         self.pg_start()
 
-        rx = self.pg0.get_capture()
+        rx = self.pg0.get_capture(len(tx))
         self.verify_tunneled_l2o4(self.pg0, rx, tx,
                                   self.pg0.local_ip4,
                                   "2.2.2.3")
@@ -578,7 +579,7 @@ class TestGRE(VppTestCase):
         self.pg_enable_capture(self.pg_interfaces)
         self.pg_start()
 
-        rx = self.pg0.get_capture()
+        rx = self.pg0.get_capture(len(tx))
         self.verify_tunneled_l2o4(self.pg0, rx, tx,
                                   self.pg0.local_ip4,
                                   "2.2.2.2")
@@ -635,7 +636,7 @@ class TestGRE(VppTestCase):
         self.pg_enable_capture(self.pg_interfaces)
         self.pg_start()
 
-        rx = self.pg0.get_capture()
+        rx = self.pg0.get_capture(len(tx))
         self.verify_tunneled_vlano4(self.pg0, rx, tx,
                                     self.pg0.local_ip4,
                                     "2.2.2.3",
@@ -651,7 +652,7 @@ class TestGRE(VppTestCase):
         self.pg_enable_capture(self.pg_interfaces)
         self.pg_start()
 
-        rx = self.pg0.get_capture()
+        rx = self.pg0.get_capture(len(tx))
         self.verify_tunneled_vlano4(self.pg0, rx, tx,
                                     self.pg0.local_ip4,
                                     "2.2.2.2",

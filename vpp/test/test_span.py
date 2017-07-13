@@ -85,8 +85,7 @@ class TestSpan(VppTestCase):
         pkts = []
         for i in range(0, TestSpan.pkts_per_burst):
             dst_if = self.flows[src_if][0]
-            pkt_info = self.create_packet_info(
-                src_if.sw_if_index, dst_if.sw_if_index)
+            pkt_info = self.create_packet_info(src_if, dst_if)
             payload = self.info_to_payload(pkt_info)
             p = (Ether(dst=src_if.local_mac, src=src_if.remote_mac) /
                  IP(src=src_if.remote_ip4, dst=dst_if.remote_ip4) /
@@ -103,11 +102,12 @@ class TestSpan(VppTestCase):
         for i in self.interfaces:
             last_info[i.sw_if_index] = None
         dst_sw_if_index = dst_if.sw_if_index
-        if len(capture_pg1) != len(capture_pg2):
-            self.logger.error(
-                "Different number of outgoing and mirrored packets : %u != %u" %
-                (len(capture_pg1), len(capture_pg2)))
-            raise
+        self.assertEqual(
+            len(capture_pg1),
+            len(capture_pg2),
+            "Different number of outgoing and mirrored packets : %u != %u" %
+            (len(capture_pg1),
+             len(capture_pg2)))
         for pkt_pg1, pkt_pg2 in zip(capture_pg1, capture_pg2):
             try:
                 ip1 = pkt_pg1[IP]
@@ -184,9 +184,11 @@ class TestSpan(VppTestCase):
         # Verify packets outgoing packet streams on mirrored interface (pg2)
         self.logger.info("Verifying capture on interfaces %s and %s" %
                          (self.pg1.name, self.pg2.name))
-        self.verify_capture(self.pg1,
-                            self.pg1.get_capture(),
-                            self.pg2.get_capture())
+        pg2_expected = self.get_packet_count_for_if_idx(self.pg1.sw_if_index)
+        self.verify_capture(
+            self.pg1,
+            self.pg1.get_capture(),
+            self.pg2.get_capture(pg2_expected))
 
 
 if __name__ == '__main__':

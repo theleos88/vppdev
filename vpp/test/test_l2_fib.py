@@ -106,7 +106,8 @@ class TestL2fib(VppTestCase):
 
             # Create BD with MAC learning and unknown unicast flooding disabled
             # and put interfaces to this BD
-            cls.vapi.bridge_domain_add_del(bd_id=cls.bd_id, uu_flood=0, learn=0)
+            cls.vapi.bridge_domain_add_del(
+                bd_id=cls.bd_id, uu_flood=0, learn=0)
             for pg_if in cls.pg_interfaces:
                 cls.vapi.sw_interface_set_l2_bridge(pg_if.sw_if_index,
                                                     bd_id=cls.bd_id)
@@ -130,11 +131,8 @@ class TestL2fib(VppTestCase):
             raise
 
     def setUp(self):
-        """
-        Clear trace and packet infos before running each test.
-        """
         super(TestL2fib, self).setUp()
-        self.packet_infos = {}
+        self.reset_packet_infos()
 
     def tearDown(self):
         """
@@ -183,8 +181,8 @@ class TestL2fib(VppTestCase):
             end_nr = start + count / n_int
             for j in range(start, end_nr):
                 host = self.hosts_by_pg_idx[pg_if.sw_if_index][j]
-                self.vapi.l2fib_add_del(host.mac, self.bd_id, pg_if.sw_if_index,
-                                        static_mac=1)
+                self.vapi.l2fib_add_del(
+                    host.mac, self.bd_id, pg_if.sw_if_index, static_mac=1)
                 counter += 1
                 percentage = counter / count * 100
                 if percentage > percent:
@@ -205,8 +203,8 @@ class TestL2fib(VppTestCase):
         for pg_if in self.pg_interfaces:
             for j in range(count / n_int):
                 host = self.hosts_by_pg_idx[pg_if.sw_if_index][0]
-                self.vapi.l2fib_add_del(host.mac, self.bd_id, pg_if.sw_if_index,
-                                        is_add=0)
+                self.vapi.l2fib_add_del(
+                    host.mac, self.bd_id, pg_if.sw_if_index, is_add=0)
                 self.deleted_hosts_by_pg_idx[pg_if.sw_if_index].append(host)
                 del self.hosts_by_pg_idx[pg_if.sw_if_index][0]
                 counter += 1
@@ -236,8 +234,7 @@ class TestL2fib(VppTestCase):
             for i in range(0, n_int):
                 dst_host = dst_hosts[i]
                 src_host = random.choice(src_hosts)
-                pkt_info = self.create_packet_info(
-                    src_if.sw_if_index, dst_if.sw_if_index)
+                pkt_info = self.create_packet_info(src_if, dst_if)
                 payload = self.info_to_payload(pkt_info)
                 p = (Ether(dst=dst_host.mac, src=src_host.mac) /
                      IP(src=src_host.ip4, dst=dst_host.ip4) /
@@ -314,7 +311,7 @@ class TestL2fib(VppTestCase):
         # Test
         # Create incoming packet streams for packet-generator interfaces for
         # deleted MAC addresses
-        self.packet_infos = {}
+        self.reset_packet_infos()
         for i in self.pg_interfaces:
             pkts = self.create_stream(i, self.pg_if_packet_sizes, deleted=True)
             i.add_stream(pkts)

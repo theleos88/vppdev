@@ -95,10 +95,10 @@ class TestL2bdMultiInst(VppTestCase):
             for i in range(0, len(cls.pg_interfaces), 3):
                 cls.flows[cls.pg_interfaces[i]] = [cls.pg_interfaces[i + 1],
                                                    cls.pg_interfaces[i + 2]]
-                cls.flows[cls.pg_interfaces[i + 1]] = [cls.pg_interfaces[i],
-                                                       cls.pg_interfaces[i + 2]]
-                cls.flows[cls.pg_interfaces[i + 2]] = [cls.pg_interfaces[i],
-                                                       cls.pg_interfaces[i + 1]]
+                cls.flows[cls.pg_interfaces[i + 1]] = \
+                    [cls.pg_interfaces[i], cls.pg_interfaces[i + 2]]
+                cls.flows[cls.pg_interfaces[i + 2]] = \
+                    [cls.pg_interfaces[i], cls.pg_interfaces[i + 1]]
 
             # Mapping between packet-generator index and lists of test hosts
             cls.hosts_by_pg_idx = dict()
@@ -138,7 +138,6 @@ class TestL2bdMultiInst(VppTestCase):
         Clear trace and packet infos before running each test.
         """
         super(TestL2bdMultiInst, self).setUp()
-        self.packet_infos = {}
 
     def tearDown(self):
         """
@@ -173,8 +172,9 @@ class TestL2bdMultiInst(VppTestCase):
 
     def create_bd_and_mac_learn(self, count, start=1):
         """
-        Create required number of bridge domains with MAC learning enabled, put
-        3 l2-pg interfaces to every bridge domain and send MAC learning packets.
+        Create required number of bridge domains with MAC learning enabled,
+        put 3 l2-pg interfaces to every bridge domain and send MAC learning
+        packets.
 
         :param int count: Number of bridge domains to be created.
         :param int start: Starting number of the bridge domain ID.
@@ -243,8 +243,7 @@ class TestL2bdMultiInst(VppTestCase):
             for i in range(0, n_int):
                 dst_host = dst_hosts[i]
                 src_host = random.choice(src_hosts)
-                pkt_info = self.create_packet_info(
-                    src_if.sw_if_index, dst_if.sw_if_index)
+                pkt_info = self.create_packet_info(src_if, dst_if)
                 payload = self.info_to_payload(pkt_info)
                 p = (Ether(dst=dst_host.mac, src=src_host.mac) /
                      IP(src=src_host.ip4, dst=dst_host.ip4) /
@@ -393,17 +392,8 @@ class TestL2bdMultiInst(VppTestCase):
         for pg_if in self.pg_interfaces:
             capture = pg_if.get_capture()
             if pg_if in self.pg_in_bd:
-                if len(capture) == 0:
-                    raise RuntimeError("Interface %s is in BD but the capture "
-                                       "is empty!" % pg_if.name)
                 self.verify_capture(pg_if, capture)
-            elif pg_if in self.pg_not_in_bd:
-                try:
-                    self.assertEqual(len(capture), 0)
-                except AssertionError:
-                    raise RuntimeError("Interface %s is not in BD but "
-                                       "the capture is not empty!" % pg_if.name)
-            else:
+            elif pg_if not in self.pg_not_in_bd:
                 self.logger.error("Unknown interface: %s" % pg_if.name)
 
     def test_l2bd_inst_01(self):

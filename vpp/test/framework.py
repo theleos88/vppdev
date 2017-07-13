@@ -1,19 +1,33 @@
 #!/usr/bin/env python
 
-import subprocess
+from __future__ import print_function
+import gc
+import sys
+import os
+import select
 import unittest
 import tempfile
 import time
 import resource
 from collections import deque
-from threading import Thread
+from threading import Thread, Event
 from inspect import getdoc
+from traceback import format_exception
+from logging import FileHandler, DEBUG, Formatter
+from scapy.packet import Raw
 from hook import StepHook, PollHook
 from vpp_pg_interface import VppPGInterface
+from vpp_sub_interface import VppSubInterface
 from vpp_lo_interface import VppLoInterface
 from vpp_papi_provider import VppPapiProvider
-from scapy.packet import Raw
 from log import *
+from vpp_object import VppObjectRegistry
+if os.name == 'posix' and sys.version_info[0] < 3:
+    # using subprocess32 is recommended by python official documentation
+    # @ https://docs.python.org/2/library/subprocess.html
+    import subprocess32 as subprocess
+else:
+    import subprocess
 
 """
   Test framework module.
@@ -36,6 +50,10 @@ class _PacketInfo(object):
     #: Store the index of the destination packet generator interface
     #: of the packet.
     dst = -1
+    #: Store expected ip version
+    ip = -1
+    #: Store expected upper protocol
+    proto = -1
     #: Store the copy of the former packet.
     data = None
 
@@ -47,9 +65,30 @@ class _PacketInfo(object):
         return index and src and dst and data
 
 
-def pump_output(out, deque):
-    for line in iter(out.readline, b''):
-        deque.append(line)
+def pump_output(testclass):
+    """ pump output from vpp stdout/stderr to proper queues """
+    while not testclass.pump_thread_stop_flag.wait(0):
+        readable = select.select([testclass.vpp.stdout.fileno(),
+                                  testclass.vpp.stderr.fileno(),
+                                  testclass.pump_thread_wakeup_pipe[0]],
+                                 [], [])[0]
+        if testclass.vpp.stdout.fileno() in readable:
+            read = os.read(testclass.vpp.stdout.fileno(), 1024)
+            testclass.vpp_stdout_deque.append(read)
+        if testclass.vpp.stderr.fileno() in readable:
+            read = os.read(testclass.vpp.stderr.fileno(), 1024)
+            testclass.vpp_stderr_deque.append(read)
+        # ignoring the dummy pipe here intentionally - the flag will take care
+        # of properly terminating the loop
+
+
+def running_extended_tests():
+    try:
+        s = os.getenv("EXTENDED_TESTS")
+        return True if s.lower() in ("y", "yes", "1") else False
+    except:
+        return False
+    return False
 
 
 class VppTestCase(unittest.TestCase):
@@ -62,9 +101,13 @@ class VppTestCase(unittest.TestCase):
         """List of packet infos"""
         return self._packet_infos
 
-    @packet_infos.setter
-    def packet_infos(self, value):
-        self._packet_infos = value
+    @classmethod
+    def get_packet_count_for_if_idx(cls, dst_if_index):
+        """Get the number of packet info for specified destination if index"""
+        if dst_if_index in cls._packet_count_for_dst_if_idx:
+            return cls._packet_count_for_dst_if_idx[dst_if_index]
+        else:
+            return 0
 
     @classmethod
     def instance(cls):
@@ -80,10 +123,6 @@ class VppTestCase(unittest.TestCase):
             return
         dl = d.lower()
         if dl == "core":
-            if resource.getrlimit(resource.RLIMIT_CORE)[0] <= 0:
-                # give a heads up if this is actually useless
-                cls.logger.critical("WARNING: core size limit is set 0, core "
-                                    "files will NOT be created")
             cls.debug_core = True
         elif dl == "gdb":
             cls.debug_gdb = True
@@ -107,13 +146,36 @@ class VppTestCase(unittest.TestCase):
         cls.set_debug_flags(d)
         cls.vpp_bin = os.getenv('VPP_TEST_BIN', "vpp")
         cls.plugin_path = os.getenv('VPP_TEST_PLUGIN_PATH')
+        cls.extern_plugin_path = os.getenv('EXTERN_PLUGINS')
+        plugin_path = None
+        if cls.plugin_path is not None:
+            if cls.extern_plugin_path is not None:
+                plugin_path = "%s:%s" % (
+                    cls.plugin_path, cls.extern_plugin_path)
+            else:
+                plugin_path = cls.plugin_path
+        elif cls.extern_plugin_path is not None:
+            plugin_path = cls.extern_plugin_path
         debug_cli = ""
         if cls.step or cls.debug_gdb or cls.debug_gdbserver:
             debug_cli = "cli-listen localhost:5002"
-        cls.vpp_cmdline = [cls.vpp_bin, "unix", "{", "nodaemon", debug_cli, "}",
-                           "api-segment", "{", "prefix", cls.shm_prefix, "}"]
-        if cls.plugin_path is not None:
-            cls.vpp_cmdline.extend(["plugin_path", cls.plugin_path])
+        coredump_size = None
+        try:
+            size = os.getenv("COREDUMP_SIZE")
+            if size is not None:
+                coredump_size = "coredump-size %s" % size
+        except:
+            pass
+        if coredump_size is None:
+            coredump_size = "coredump-size unlimited"
+        cls.vpp_cmdline = [cls.vpp_bin, "unix",
+                           "{", "nodaemon", debug_cli, coredump_size, "}",
+                           "api-trace", "{", "on", "}",
+                           "api-segment", "{", "prefix", cls.shm_prefix, "}",
+                           "plugins", "{", "plugin", "dpdk_plugin.so", "{",
+                           "disable", "}", "}"]
+        if plugin_path is not None:
+            cls.vpp_cmdline.extend(["plugin_path", plugin_path])
         cls.logger.info("vpp_cmdline: %s" % cls.vpp_cmdline)
 
     @classmethod
@@ -172,41 +234,45 @@ class VppTestCase(unittest.TestCase):
         Perform class setup before running the testcase
         Remove shared memory files, start vpp and connect the vpp-api
         """
+        gc.collect()  # run garbage collection first
         cls.logger = getLogger(cls.__name__)
         cls.tempdir = tempfile.mkdtemp(
             prefix='vpp-unittest-' + cls.__name__ + '-')
+        file_handler = FileHandler("%s/log.txt" % cls.tempdir)
+        file_handler.setFormatter(
+            Formatter(fmt='%(asctime)s,%(msecs)03d %(message)s',
+                      datefmt="%H:%M:%S"))
+        file_handler.setLevel(DEBUG)
+        cls.logger.addHandler(file_handler)
         cls.shm_prefix = cls.tempdir.split("/")[-1]
         os.chdir(cls.tempdir)
         cls.logger.info("Temporary dir is %s, shm prefix is %s",
                         cls.tempdir, cls.shm_prefix)
         cls.setUpConstants()
+        cls.reset_packet_infos()
         cls._captures = []
         cls._zombie_captures = []
-        cls.packet_infos = {}
         cls.verbose = 0
         cls.vpp_dead = False
-        print(double_line_delim)
-        print(colorize(getdoc(cls).splitlines()[0], YELLOW))
-        print(double_line_delim)
+        cls.registry = VppObjectRegistry()
         # need to catch exceptions here because if we raise, then the cleanup
         # doesn't get called and we might end with a zombie vpp
         try:
             cls.run_vpp()
             cls.vpp_stdout_deque = deque()
-            cls.vpp_stdout_reader_thread = Thread(target=pump_output, args=(
-                cls.vpp.stdout, cls.vpp_stdout_deque))
-            cls.vpp_stdout_reader_thread.start()
             cls.vpp_stderr_deque = deque()
-            cls.vpp_stderr_reader_thread = Thread(target=pump_output, args=(
-                cls.vpp.stderr, cls.vpp_stderr_deque))
-            cls.vpp_stderr_reader_thread.start()
+            cls.pump_thread_stop_flag = Event()
+            cls.pump_thread_wakeup_pipe = os.pipe()
+            cls.pump_thread = Thread(target=pump_output, args=(cls,))
+            cls.pump_thread.daemon = True
+            cls.pump_thread.start()
             cls.vapi = VppPapiProvider(cls.shm_prefix, cls.shm_prefix, cls)
             if cls.step:
                 hook = StepHook(cls)
             else:
                 hook = PollHook(cls)
             cls.vapi.register_hook(hook)
-            time.sleep(0.1)
+            cls.sleep(0.1, "after vpp startup, before initial poll")
             hook.poll_vpp()
             try:
                 cls.vapi.connect()
@@ -235,15 +301,28 @@ class VppTestCase(unittest.TestCase):
                 print(double_line_delim)
                 print("VPP or GDB server is still running")
                 print(single_line_delim)
-                raw_input("When done debugging, press ENTER to kill the process"
-                          " and finish running the testcase...")
+                raw_input("When done debugging, press ENTER to kill the "
+                          "process and finish running the testcase...")
+
+        os.write(cls.pump_thread_wakeup_pipe[1], 'ding dong wake up')
+        cls.pump_thread_stop_flag.set()
+        if hasattr(cls, 'pump_thread'):
+            cls.logger.debug("Waiting for pump thread to stop")
+            cls.pump_thread.join()
+        if hasattr(cls, 'vpp_stderr_reader_thread'):
+            cls.logger.debug("Waiting for stdderr pump to stop")
+            cls.vpp_stderr_reader_thread.join()
 
         if hasattr(cls, 'vpp'):
             if hasattr(cls, 'vapi'):
                 cls.vapi.disconnect()
+                del cls.vapi
             cls.vpp.poll()
             if cls.vpp.returncode is None:
+                cls.logger.debug("Sending TERM to vpp")
                 cls.vpp.terminate()
+                cls.logger.debug("Waiting for vpp to die")
+                cls.vpp.communicate()
             del cls.vpp
 
         if hasattr(cls, 'vpp_stdout_deque'):
@@ -275,18 +354,37 @@ class VppTestCase(unittest.TestCase):
 
     def tearDown(self):
         """ Show various debug prints after each test """
+        self.logger.debug("--- tearDown() for %s.%s(%s) called ---" %
+                          (self.__class__.__name__, self._testMethodName,
+                           self._testMethodDoc))
         if not self.vpp_dead:
             self.logger.debug(self.vapi.cli("show trace"))
             self.logger.info(self.vapi.ppcli("show int"))
             self.logger.info(self.vapi.ppcli("show hardware"))
             self.logger.info(self.vapi.ppcli("show error"))
             self.logger.info(self.vapi.ppcli("show run"))
+            self.registry.remove_vpp_config(self.logger)
+            # Save/Dump VPP api trace log
+            api_trace = "vpp_api_trace.%s.log" % self._testMethodName
+            tmp_api_trace = "/tmp/%s" % api_trace
+            vpp_api_trace_log = "%s/%s" % (self.tempdir, api_trace)
+            self.logger.info(self.vapi.ppcli("api trace save %s" % api_trace))
+            self.logger.info("Moving %s to %s\n" % (tmp_api_trace,
+                                                    vpp_api_trace_log))
+            os.rename(tmp_api_trace, vpp_api_trace_log)
+            self.logger.info(self.vapi.ppcli("api trace dump %s" %
+                                             vpp_api_trace_log))
+        else:
+            self.registry.unregister_all(self.logger)
 
     def setUp(self):
         """ Clear trace before running each test"""
+        self.logger.debug("--- setUp() for %s.%s(%s) called ---" %
+                          (self.__class__.__name__, self._testMethodName,
+                           self._testMethodDoc))
         if self.vpp_dead:
             raise Exception("VPP is dead when setting up the test")
-        time.sleep(.1)
+        self.sleep(.1, "during setUp")
         self.vpp_stdout_deque.append(
             "--- test setUp() for %s.%s(%s) starts here ---\n" %
             (self.__class__.__name__, self._testMethodName,
@@ -331,9 +429,7 @@ class VppTestCase(unittest.TestCase):
         for stamp, cap_name in cls._zombie_captures:
             wait = stamp + capture_ttl - now
             if wait > 0:
-                cls.logger.debug("Waiting for %ss before deleting capture %s",
-                                 wait, cap_name)
-                time.sleep(wait)
+                cls.sleep(wait, "before deleting capture %s" % cap_name)
                 now = time.time()
             cls.logger.debug("Removing zombie capture %s" % cap_name)
             cls.vapi.cli('packet-generator delete %s' % cap_name)
@@ -346,9 +442,10 @@ class VppTestCase(unittest.TestCase):
     @classmethod
     def create_pg_interfaces(cls, interfaces):
         """
-        Create packet-generator interfaces
+        Create packet-generator interfaces.
 
-        :param interfaces: iterable indexes of the interfaces
+        :param interfaces: iterable indexes of the interfaces.
+        :returns: List of created interfaces.
 
         """
         result = []
@@ -362,10 +459,10 @@ class VppTestCase(unittest.TestCase):
     @classmethod
     def create_loopback_interfaces(cls, interfaces):
         """
-        Create loopback interfaces
+        Create loopback interfaces.
 
-        :param interfaces: iterable indexes of the interfaces
-
+        :param interfaces: iterable indexes of the interfaces.
+        :returns: List of created interfaces.
         """
         result = []
         for i in interfaces:
@@ -390,31 +487,37 @@ class VppTestCase(unittest.TestCase):
         if extend > 0:
             packet[Raw].load += ' ' * extend
 
-    def add_packet_info_to_list(self, info):
-        """
-        Add packet info to the testcase's packet info list
+    @classmethod
+    def reset_packet_infos(cls):
+        """ Reset the list of packet info objects and packet counts to zero """
+        cls._packet_infos = {}
+        cls._packet_count_for_dst_if_idx = {}
 
-        :param info: packet info
-
-        """
-        info.index = len(self.packet_infos)
-        self.packet_infos[info.index] = info
-
-    def create_packet_info(self, src_pg_index, dst_pg_index):
+    @classmethod
+    def create_packet_info(cls, src_if, dst_if):
         """
         Create packet info object containing the source and destination indexes
         and add it to the testcase's packet info list
 
-        :param src_pg_index: source packet-generator index
-        :param dst_pg_index: destination packet-generator index
+        :param VppInterface src_if: source interface
+        :param VppInterface dst_if: destination interface
 
         :returns: _PacketInfo object
 
         """
         info = _PacketInfo()
-        self.add_packet_info_to_list(info)
-        info.src = src_pg_index
-        info.dst = dst_pg_index
+        info.index = len(cls._packet_infos)
+        info.src = src_if.sw_if_index
+        info.dst = dst_if.sw_if_index
+        if isinstance(dst_if, VppSubInterface):
+            dst_idx = dst_if.parent.sw_if_index
+        else:
+            dst_idx = dst_if.sw_if_index
+        if dst_idx in cls._packet_count_for_dst_if_idx:
+            cls._packet_count_for_dst_if_idx[dst_idx] += 1
+        else:
+            cls._packet_count_for_dst_if_idx[dst_idx] = 1
+        cls._packet_infos[info.index] = info
         return info
 
     @staticmethod
@@ -426,7 +529,8 @@ class VppTestCase(unittest.TestCase):
 
         :returns: string containing serialized data from packet info
         """
-        return "%d %d %d" % (info.index, info.src, info.dst)
+        return "%d %d %d %d %d" % (info.index, info.src, info.dst,
+                                   info.ip, info.proto)
 
     @staticmethod
     def payload_to_info(payload):
@@ -443,6 +547,8 @@ class VppTestCase(unittest.TestCase):
         info.index = int(numbers[0])
         info.src = int(numbers[1])
         info.dst = int(numbers[2])
+        info.ip = int(numbers[3])
+        info.proto = int(numbers[4])
         return info
 
     def get_next_packet_info(self, info):
@@ -458,10 +564,10 @@ class VppTestCase(unittest.TestCase):
             next_index = 0
         else:
             next_index = info.index + 1
-        if next_index == len(self.packet_infos):
+        if next_index == len(self._packet_infos):
             return None
         else:
-            return self.packet_infos[next_index]
+            return self._packet_infos[next_index]
 
     def get_next_packet_info_for_interface(self, src_index, info):
         """
@@ -500,7 +606,7 @@ class VppTestCase(unittest.TestCase):
 
     def assert_equal(self, real_value, expected_value, name_or_class=None):
         if name_or_class is None:
-            self.assertEqual(real_value, expected_value, msg)
+            self.assertEqual(real_value, expected_value)
             return
         try:
             msg = "Invalid %s: %d('%s') does not match expected value %d('%s')"
@@ -513,18 +619,39 @@ class VppTestCase(unittest.TestCase):
 
         self.assertEqual(real_value, expected_value, msg)
 
-    def assert_in_range(
-            self,
-            real_value,
-            expected_min,
-            expected_max,
-            name=None):
+    def assert_in_range(self,
+                        real_value,
+                        expected_min,
+                        expected_max,
+                        name=None):
         if name is None:
             msg = None
         else:
             msg = "Invalid %s: %s out of range <%s,%s>" % (
                 name, real_value, expected_min, expected_max)
         self.assertTrue(expected_min <= real_value <= expected_max, msg)
+
+    @classmethod
+    def sleep(cls, timeout, remark=None):
+        if hasattr(cls, 'logger'):
+            cls.logger.debug("Sleeping for %ss (%s)" % (timeout, remark))
+        time.sleep(timeout)
+
+
+class TestCasePrinter(object):
+    _shared_state = {}
+
+    def __init__(self):
+        self.__dict__ = self._shared_state
+        if not hasattr(self, "_test_case_set"):
+            self._test_case_set = set()
+
+    def print_test_case_heading_if_first_time(self, case):
+        if case.__class__ not in self._test_case_set:
+            print(double_line_delim)
+            print(colorize(getdoc(case.__class__).splitlines()[0], YELLOW))
+            print(double_line_delim)
+            self._test_case_set.add(case.__class__)
 
 
 class VppTestResult(unittest.TestResult):
@@ -544,10 +671,10 @@ class VppTestResult(unittest.TestResult):
 
     def __init__(self, stream, descriptions, verbosity):
         """
-        :param stream File descriptor to store where to report test results. Set
-            to the standard error stream by default.
-        :param descriptions Boolean variable to store information if to use test
-            case descriptions.
+        :param stream File descriptor to store where to report test results.
+            Set to the standard error stream by default.
+        :param descriptions Boolean variable to store information if to use
+            test case descriptions.
         :param verbosity Integer variable to store required verbosity level.
         """
         unittest.TestResult.__init__(self, stream, descriptions, verbosity)
@@ -555,6 +682,7 @@ class VppTestResult(unittest.TestResult):
         self.descriptions = descriptions
         self.verbosity = verbosity
         self.result_string = None
+        self.printer = TestCasePrinter()
 
     def addSuccess(self, test):
         """
@@ -563,6 +691,11 @@ class VppTestResult(unittest.TestResult):
         :param test:
 
         """
+        if hasattr(test, 'logger'):
+            test.logger.debug("--- addSuccess() %s.%s(%s) called"
+                              % (test.__class__.__name__,
+                                 test._testMethodName,
+                                 test._testMethodDoc))
         unittest.TestResult.addSuccess(self, test)
         self.result_string = colorize("OK", GREEN)
 
@@ -574,6 +707,12 @@ class VppTestResult(unittest.TestResult):
         :param reason:
 
         """
+        if hasattr(test, 'logger'):
+            test.logger.debug("--- addSkip() %s.%s(%s) called, reason is %s"
+                              % (test.__class__.__name__,
+                                 test._testMethodName,
+                                 test._testMethodDoc,
+                                 reason))
         unittest.TestResult.addSkip(self, test, reason)
         self.result_string = colorize("SKIP", YELLOW)
 
@@ -585,6 +724,13 @@ class VppTestResult(unittest.TestResult):
         :param err: error message
 
         """
+        if hasattr(test, 'logger'):
+            test.logger.debug("--- addFailure() %s.%s(%s) called, err is %s"
+                              % (test.__class__.__name__,
+                                 test._testMethodName,
+                                 test._testMethodDoc, err))
+            test.logger.debug("formatted exception is:\n%s" %
+                              "".join(format_exception(*err)))
         unittest.TestResult.addFailure(self, test, err)
         if hasattr(test, 'tempdir'):
             self.result_string = colorize("FAIL", RED) + \
@@ -600,6 +746,13 @@ class VppTestResult(unittest.TestResult):
         :param err: error message
 
         """
+        if hasattr(test, 'logger'):
+            test.logger.debug("--- addError() %s.%s(%s) called, err is %s"
+                              % (test.__class__.__name__,
+                                 test._testMethodName,
+                                 test._testMethodDoc, err))
+            test.logger.debug("formatted exception is:\n%s" %
+                              "".join(format_exception(*err)))
         unittest.TestResult.addError(self, test, err)
         if hasattr(test, 'tempdir'):
             self.result_string = colorize("ERROR", RED) + \
@@ -629,6 +782,7 @@ class VppTestResult(unittest.TestResult):
         :param test:
 
         """
+        self.printer.print_test_case_heading_if_first_time(test)
         unittest.TestResult.startTest(self, test)
         if self.verbosity > 0:
             self.stream.writeln(
@@ -645,12 +799,12 @@ class VppTestResult(unittest.TestResult):
         unittest.TestResult.stopTest(self, test)
         if self.verbosity > 0:
             self.stream.writeln(single_line_delim)
-            self.stream.writeln("%-60s%s" %
-                                (self.getDescription(test), self.result_string))
+            self.stream.writeln("%-73s%s" % (self.getDescription(test),
+                                             self.result_string))
             self.stream.writeln(single_line_delim)
         else:
-            self.stream.writeln("%-60s%s" %
-                                (self.getDescription(test), self.result_string))
+            self.stream.writeln("%-73s%s" % (self.getDescription(test),
+                                             self.result_string))
 
     def printErrors(self):
         """
@@ -679,12 +833,81 @@ class VppTestResult(unittest.TestResult):
 
 class VppTestRunner(unittest.TextTestRunner):
     """
-    A basic test runner implementation which prints results on standard error.
+    A basic test runner implementation which prints results to standard error.
     """
     @property
     def resultclass(self):
         """Class maintaining the results of the tests"""
         return VppTestResult
+
+    def __init__(self, stream=sys.stderr, descriptions=True, verbosity=1,
+                 failfast=False, buffer=False, resultclass=None):
+        # ignore stream setting here, use hard-coded stdout to be in sync
+        # with prints from VppTestCase methods ...
+        super(VppTestRunner, self).__init__(sys.stdout, descriptions,
+                                            verbosity, failfast, buffer,
+                                            resultclass)
+
+    test_option = "TEST"
+
+    def parse_test_option(self):
+        try:
+            f = os.getenv(self.test_option)
+        except:
+            f = None
+        filter_file_name = None
+        filter_class_name = None
+        filter_func_name = None
+        if f:
+            if '.' in f:
+                parts = f.split('.')
+                if len(parts) > 3:
+                    raise Exception("Unrecognized %s option: %s" %
+                                    (self.test_option, f))
+                if len(parts) > 2:
+                    if parts[2] not in ('*', ''):
+                        filter_func_name = parts[2]
+                if parts[1] not in ('*', ''):
+                    filter_class_name = parts[1]
+                if parts[0] not in ('*', ''):
+                    if parts[0].startswith('test_'):
+                        filter_file_name = parts[0]
+                    else:
+                        filter_file_name = 'test_%s' % parts[0]
+            else:
+                if f.startswith('test_'):
+                    filter_file_name = f
+                else:
+                    filter_file_name = 'test_%s' % f
+        return filter_file_name, filter_class_name, filter_func_name
+
+    def filter_tests(self, tests, filter_file, filter_class, filter_func):
+        result = unittest.suite.TestSuite()
+        for t in tests:
+            if isinstance(t, unittest.suite.TestSuite):
+                # this is a bunch of tests, recursively filter...
+                x = self.filter_tests(t, filter_file, filter_class,
+                                      filter_func)
+                if x.countTestCases() > 0:
+                    result.addTest(x)
+            elif isinstance(t, unittest.TestCase):
+                # this is a single test
+                parts = t.id().split('.')
+                # t.id() for common cases like this:
+                # test_classifier.TestClassifier.test_acl_ip
+                # apply filtering only if it is so
+                if len(parts) == 3:
+                    if filter_file and filter_file != parts[0]:
+                        continue
+                    if filter_class and filter_class != parts[1]:
+                        continue
+                    if filter_func and filter_func != parts[2]:
+                        continue
+                result.addTest(t)
+            else:
+                # unexpected object, don't touch it
+                result.addTest(t)
+        return result
 
     def run(self, test):
         """
@@ -693,5 +916,13 @@ class VppTestRunner(unittest.TextTestRunner):
         :param test:
 
         """
+        gc.disable()  # disable garbage collection, we'll do that manually
         print("Running tests using custom test runner")  # debug message
-        return super(VppTestRunner, self).run(test)
+        filter_file, filter_class, filter_func = self.parse_test_option()
+        print("Active filters: file=%s, class=%s, function=%s" % (
+            filter_file, filter_class, filter_func))
+        filtered = self.filter_tests(test, filter_file, filter_class,
+                                     filter_func)
+        print("%s out of %s tests match specified filters" % (
+            filtered.countTestCases(), test.countTestCases()))
+        return super(VppTestRunner, self).run(filtered)
