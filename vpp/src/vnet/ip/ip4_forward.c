@@ -68,7 +68,7 @@ always_inline u32 get_ts_from_port(u16 d1, u16 d2){
 
 always_inline u16 get_16_from_port(u16 d){
     u16 swapped;
-    swapped = ( (d>>8)&0xff | (d<<8)&0xff00 );
+    swapped = ( ((d>>8)&0xff) | ((d<<8)&0xff00) );
     return swapped;
 }
 
