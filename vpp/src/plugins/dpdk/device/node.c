@@ -648,6 +648,9 @@ dpdk_input (vlib_main_t * vm, vlib_node_runtime_t * node, vlib_frame_t * f)
 
   poll_rate_limit (dm);
 
+  /* For the vstate, we should detect here the cpu cycles*/
+
+
   return n_rx_packets;
 }
 
