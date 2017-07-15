@@ -27,6 +27,8 @@
 #include <vnet/feature/feature.h>
 
 #include <dpdk/device/dpdk_priv.h>
+#include <dpdk/device/flow_table.h>
+#include <dpdk/device/flow_table_var.h>
 
 static char *dpdk_error_strings[] = {
 #define _(n,s) s,
@@ -341,6 +343,14 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
       u8 error0, error1, error2, error3;
       u64 or_ol_flags;
 
+//////////////////////////////////////////////
+    u64 hash0,hash1,hash2,hash3;
+    u32 modulo0,modulo1,modulo2,modulo3;
+    u16 pktlen0,pktlen1,pktlen2,pktlen3;
+    u8  drop0,drop1,drop2,drop3 ;
+//////////////////////////////////////////////
+
+
       vlib_get_next_frame (vm, node, next_index, to_next, n_left_to_next);
 
       while (n_buffers >= 12 && n_left_to_next >= 4)
@@ -439,6 +449,45 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
 	      b3->error = node->errors[error3];
 	    }
 
+////////////////////////////////////////////
+    hash0 = (unsigned)mb0->hash.rss;
+    hash1 = (unsigned)mb1->hash.rss;
+    hash2 = (unsigned)mb2->hash.rss;
+    hash3 = (unsigned)mb3->hash.rss;
+    modulo0 = (hash0)%TABLESIZE;
+    modulo1 = (hash1)%TABLESIZE;
+    modulo2 = (hash2)%TABLESIZE;
+    modulo3 = (hash3)%TABLESIZE;
+    pktlen0 = mb0->data_len + 4;
+    pktlen1 = mb1->data_len + 4;
+    pktlen2 = mb2->data_len + 4;
+    pktlen3 = mb3->data_len + 4;
+    drop0 = fq(modulo0,hash0,pktlen0);
+    drop1 = fq(modulo1,hash1,pktlen1);
+    drop2 = fq(modulo2,hash2,pktlen2);
+    drop3 = fq(modulo3,hash3,pktlen3);
+    if(PREDICT_FALSE(drop0 == 1)){
+        next0 = VNET_DEVICE_INPUT_NEXT_DROP;
+        error0 = DPDK_ERROR_IP_CHECKSUM_ERROR;
+        b0->error = node->errors[error0];
+    }
+    if(PREDICT_FALSE(drop1 == 1)){
+        next1 = VNET_DEVICE_INPUT_NEXT_DROP;
+        error1 = DPDK_ERROR_IP_CHECKSUM_ERROR;
+        b1->error = node->errors[error1];
+    }
+    if(PREDICT_FALSE(drop2 == 1)){
+        next2 = VNET_DEVICE_INPUT_NEXT_DROP;
+        error2 = DPDK_ERROR_IP_CHECKSUM_ERROR;
+        b2->error = node->errors[error2];
+    }
+    if(PREDICT_FALSE(drop3 == 1)){
+        next3 = VNET_DEVICE_INPUT_NEXT_DROP;
+        error3 = DPDK_ERROR_IP_CHECKSUM_ERROR;
+        b3->error = node->errors[error3];
+    }
+///////////////////////////////////////////////
+
 	  vlib_buffer_advance (b0, device_input_next_node_advance[next0]);
 	  vlib_buffer_advance (b1, device_input_next_node_advance[next1]);
 	  vlib_buffer_advance (b2, device_input_next_node_advance[next2]);
@@ -518,6 +567,18 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
 
 	  dpdk_rx_error_from_mb (mb0, &next0, &error0);
 	  b0->error = node->errors[error0];
+
+////////////////////////////////////////////////
+    hash0 = (unsigned)mb0->hash.rss;
+    modulo0 = (hash0)%TABLESIZE;
+    pktlen0 = mb0->data_len + 4;
+    drop0 = fq(modulo0,hash0,pktlen0);
+    if(PREDICT_FALSE(drop0 == 1)){
+        next0 = VNET_DEVICE_INPUT_NEXT_DROP;
+        error0 = DPDK_ERROR_IP_CHECKSUM_ERROR;
+        b0->error = node->errors[error0];
+    }
+////////////////////////////////////////////////
 
 	  vlib_buffer_advance (b0, device_input_next_node_advance[next0]);
 
@@ -647,9 +708,6 @@ dpdk_input (vlib_main_t * vm, vlib_node_runtime_t * node, vlib_frame_t * f)
   /* *INDENT-ON* */
 
   poll_rate_limit (dm);
-
-  /* For the vstate, we should detect here the cpu cycles*/
-
 
   return n_rx_packets;
 }
