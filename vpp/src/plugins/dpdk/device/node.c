@@ -30,6 +30,13 @@
 #include <dpdk/device/flow_table.h>
 #include <dpdk/device/flow_table_var.h>
 
+always_inline u32 get_ts_noswap_from_port(u16 d1, u16 d2){
+    u32 swapped;
+    swapped = (  ( d2 & 0xffff  ) | ( (d1<<16) & 0xffff0000 )   );
+
+    return swapped;
+}
+
 static char *dpdk_error_strings[] = {
 #define _(n,s) s,
   foreach_dpdk_error
