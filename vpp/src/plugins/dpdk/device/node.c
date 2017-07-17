@@ -439,6 +439,19 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
 	      b3->error = node->errors[error3];
 	    }
 
+      // Leonardo, Get mac address and print.
+      ethernet_header_t * et0 = vlib_buffer_get_current(b0);
+      uint32_t ts = 0;
+      uint8_t *a = (uint8_t*)(&ts);
+      a[0] = et0->src_address[0];
+      a[1] = et0->src_address[1];
+      a[2] = et0->src_address[2];
+
+      printf ( " Number is %d\n ", ts );
+      printf ( " If not, is %02x %02x %02x\n ", et0->src_address[0], et0->src_address[1], et0->src_address[2]  );
+
+      //////////////////End of Get mac/////////////////////////////
+
 	  vlib_buffer_advance (b0, device_input_next_node_advance[next0]);
 	  vlib_buffer_advance (b1, device_input_next_node_advance[next1]);
 	  vlib_buffer_advance (b2, device_input_next_node_advance[next2]);
