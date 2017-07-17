@@ -622,6 +622,11 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
 
   vnet_device_increment_rx_packets (cpu_index, mb_index);
 
+/*vstate update*/
+old_t = t;
+t = (u64)(unix_time_now_nsec ());
+departure();
+	
   return mb_index;
 }
 
