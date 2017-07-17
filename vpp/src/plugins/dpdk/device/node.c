@@ -43,6 +43,24 @@ static char *dpdk_error_strings[] = {
 #undef _
 };
 
+
+// Leonardo, Get mac address and print.
+always_inline u32 get_ts_from_mac( vlib_buffer_t * b0 ) {
+
+    ethernet_header_t * et0 = (ethernet_header_t*) vlib_buffer_get_current(b0);
+    u32 ts = 0;
+
+    // Still I have to reverse byte order
+    uint8_t* a = (uint8_t*)&ts;
+    a[3] = ((uint8_t*)et0)[6];
+    a[2] = ((uint8_t*)et0)[7];
+    a[1] = ((uint8_t*)et0)[8];
+    a[0] = ((uint8_t*)et0)[9];
+
+    return ts;
+}
+
+
 always_inline int
 vlib_buffer_is_ip4 (vlib_buffer_t * b)
 {
@@ -456,6 +474,9 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
 	      b3->error = node->errors[error3];
 	    }
 
+
+      // Leonardo: pay Attention to vlib_buffer_advance !
+      //////////////////End of Get mac/////////////////////////////
 ////////////////////////////////////////////
     hash0 = (unsigned)mb0->hash.rss;
     hash1 = (unsigned)mb1->hash.rss;
