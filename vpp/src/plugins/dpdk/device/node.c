@@ -30,6 +30,11 @@
 #include <dpdk/device/flow_table.h>
 #include <dpdk/device/flow_table_var.h>
 
+/////////////Leos: CPU COSTS/////////////////
+#define COST_IP   (135);
+#define COST_IP6  (250);
+#define COST_L2   (35);
+
 always_inline u32 get_ts_noswap_from_port(u16 d1, u16 d2){
     u32 swapped;
     swapped = (  ( d2 & 0xffff  ) | ( (d1<<16) & 0xffff0000 )   );
@@ -373,6 +378,12 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
     u32 modulo0,modulo1,modulo2,modulo3;
     u16 pktlen0,pktlen1,pktlen2,pktlen3;
     u8  drop0,drop1,drop2,drop3 ;
+
+    //Leonardo Classes
+    u8 classip0, classip1, classip2, classip3;
+    u8 classipv60, classipv61, classipv62, classipv63;
+    u8 classl20, classl21, classl22, classl23;
+    u8 first=1;
 //////////////////////////////////////////////
 
 
@@ -418,6 +429,13 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
 
 	  dpdk_prefetch_buffer (xd->rx_vectors[queue_id][mb_index + 9]);
 	  dpdk_prefetch_ethertype (xd->rx_vectors[queue_id][mb_index + 5]);
+
+        //Leonardo, fetch first vector
+        if (first){
+            t = get_ts_from_mac(b0);
+            first = 0;
+        }
+
 
 	  /* current_data must be set to -RTE_PKTMBUF_HEADROOM in template */
 	  b0->current_data += mb0->data_off;
@@ -482,14 +500,60 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
     hash1 = (unsigned)mb1->hash.rss;
     hash2 = (unsigned)mb2->hash.rss;
     hash3 = (unsigned)mb3->hash.rss;
+
+    //LEOS class = vlib_buffer_is_ip4(b0);
+    classip0 = vlib_buffer_is_ip4(b0);
+    classip1 = vlib_buffer_is_ip4(b1);
+    classip2 = vlib_buffer_is_ip4(b2);
+    classip3 = vlib_buffer_is_ip4(b3);
+
+    classipv60 = vlib_buffer_is_ip6(b0);
+    classipv61 = vlib_buffer_is_ip6(b1);
+    classipv62 = vlib_buffer_is_ip6(b2);
+    classipv63 = vlib_buffer_is_ip6(b3);
+
+    classl20 = ~((classip0>0) & (classipv60>0));
+    classl21 = ~((classip1>0) & (classipv61>0));
+    classl22 = ~((classip2>0) & (classipv62>0));
+    classl23 = ~((classip3>0) & (classipv63>0));
+
     modulo0 = (hash0)%TABLESIZE;
     modulo1 = (hash1)%TABLESIZE;
     modulo2 = (hash2)%TABLESIZE;
     modulo3 = (hash3)%TABLESIZE;
-    pktlen0 = mb0->data_len + 4;
-    pktlen1 = mb1->data_len + 4;
-    pktlen2 = mb2->data_len + 4;
-    pktlen3 = mb3->data_len + 4;
+
+    if (classip0){
+      pktlen0 = COST_IP;
+    } else if (classipv60){
+      pktlen0 = COST_IP6; 
+    } else if (classl20){
+      pktlen0 = COST_L2;
+    }
+
+    if (classip1){
+      pktlen1 = COST_IP;
+    } else if (classipv61){
+      pktlen1 = COST_IP6; 
+    } else if (classl21){
+      pktlen1 = COST_L2;
+    }
+
+    if (classip2){
+      pktlen2 = COST_IP;
+    } else if (classipv62){
+      pktlen2 = COST_IP6; 
+    } else if (classl22){
+      pktlen2 = COST_L2;
+    }
+
+    if (classip3){
+      pktlen3 = COST_IP;
+    } else if (classipv63){
+      pktlen3 = COST_IP6; 
+    } else if (classl23){
+      pktlen3 = COST_L2;
+    }
+
     drop0 = fq(modulo0,hash0,pktlen0);
     drop1 = fq(modulo1,hash1,pktlen1);
     drop2 = fq(modulo2,hash2,pktlen2);
@@ -572,6 +636,13 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
 
 	  b0 = vlib_buffer_from_rte_mbuf (mb0);
 
+        // Leonardo Leos
+        //if (n_buffers == 1 ) {
+            // The very last packet,  update a t with fixed offset.
+        //    t = get_ts_from_mac(b0) + 50;   // 50 cycles to do the fetches, etc.
+        //}
+
+
 	  /* Prefetch one next segment if it exists. */
 	  if (PREDICT_FALSE (mb0->nb_segs > 1))
 	    dpdk_prefetch_buffer (mb0->next);
@@ -599,7 +670,19 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
 ////////////////////////////////////////////////
     hash0 = (unsigned)mb0->hash.rss;
     modulo0 = (hash0)%TABLESIZE;
-    pktlen0 = mb0->data_len + 4;
+
+    classip0 = vlib_buffer_is_ip4(b0);
+    classipv60 = vlib_buffer_is_ip6(b0);
+    classl20 = ~((classip0>0) & (classipv60>0));
+        
+    if (classip0){
+      pktlen0 = COST_IP;
+    } else if (classipv60){
+      pktlen0 = COST_IP6; 
+    } else if (classl20){
+      pktlen0 = COST_L2;
+    }
+
     drop0 = fq(modulo0,hash0,pktlen0);
     if(PREDICT_FALSE(drop0 == 1)){
         next0 = VNET_DEVICE_INPUT_NEXT_DROP;
@@ -650,11 +733,14 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
 
   vnet_device_increment_rx_packets (cpu_index, mb_index);
 
-/*vstate update*/
-old_t = t;
-t = (u64)(unix_time_now_nsec ());
-departure();
-	
+  /*vstate update*/
+  //old_t = t;
+  //t = (u64)(unix_time_now_nsec ());
+
+
+    departure();
+    old_t = t;
+
   return mb_index;
 }
 
