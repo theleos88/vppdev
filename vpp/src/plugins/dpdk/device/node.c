@@ -31,9 +31,25 @@
 #include <dpdk/device/flow_table_var.h>
 
 /////////////Leos: CPU COSTS/////////////////
-#define COST_IP   (135);
-#define COST_IP6  (250);
-#define COST_L2   (35);
+
+/*
+#define COST_IP   (313);    // Now this is cost in cycles
+#define COST_IP6  (412);
+#define COST_L2   (242);
+*/
+
+/*
+#define COST_IP   (12);    // Redefine the cost in {%t}*10ns
+#define COST_IP6  (17);
+#define COST_L2   (9);
+*/
+
+#define COST_IP   (10)     // Redefine the cost in # UNITS
+#define COST_IP6  (13)     // 1 UNIT = 32 clk cycles
+#define COST_L2   (7)
+
+#define DEFAULT_CREDIT (80000)  //Units to reach 1 ms
+
 
 always_inline u32 get_ts_noswap_from_port(u16 d1, u16 d2){
     u32 swapped;
@@ -54,15 +70,31 @@ always_inline u32 get_ts_from_mac( vlib_buffer_t * b0 ) {
 
     ethernet_header_t * et0 = (ethernet_header_t*) vlib_buffer_get_current(b0);
     u32 ts = 0;
-
     // Still I have to reverse byte order
-    uint8_t* a = (uint8_t*)&ts;
+    //uint8_t* a = (uint8_t*)&ts;
+
+    //printf ( "%02x %02x\n", et0->src_address[0], et0->src_address[5]);
+
+/*
     a[3] = ((uint8_t*)et0)[6];
     a[2] = ((uint8_t*)et0)[7];
     a[1] = ((uint8_t*)et0)[8];
     a[0] = ((uint8_t*)et0)[9];
+*/
 
-    return ts;
+    //for (int i=0; i<32; i++){
+        //printf(" %02x ", ((uint8_t*)et0)[i]);
+    //    if ((i+1)%8==0){printf("\n");}
+    //}
+    ts = (
+        (et0->src_address[0]*(256*256*256) ) +
+        (et0->src_address[1]*(256*256) ) +
+        (et0->src_address[2]*(256) ) +
+        (et0->src_address[3]*(1) )
+    );
+
+    //printf("Parsed: %u\n", ts);
+    return  ts;
 }
 
 
@@ -430,12 +462,6 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
 	  dpdk_prefetch_buffer (xd->rx_vectors[queue_id][mb_index + 9]);
 	  dpdk_prefetch_ethertype (xd->rx_vectors[queue_id][mb_index + 5]);
 
-        //Leonardo, fetch first vector
-        if (first){
-            t = get_ts_from_mac(b0);
-            first = 0;
-        }
-
 
 	  /* current_data must be set to -RTE_PKTMBUF_HEADROOM in template */
 	  b0->current_data += mb0->data_off;
@@ -455,6 +481,16 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
 	  bi1 = vlib_get_buffer_index (vm, b1);
 	  bi2 = vlib_get_buffer_index (vm, b2);
 	  bi3 = vlib_get_buffer_index (vm, b3);
+
+
+        t=get_ts_from_mac(b0);
+        //Leonardo, fetch first vector
+        //printf("PARSING | t %u old_t %u\n", (uint32_t) t,  (uint32_t) old_t );
+        if (first){
+            t = get_ts_from_mac(b0);
+            first = 0;
+            //printf("This is the first packet in vector\n");
+        }
 
 	  to_next[0] = bi0;
 	  to_next[1] = bi1;
@@ -512,10 +548,10 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
     classipv62 = vlib_buffer_is_ip6(b2);
     classipv63 = vlib_buffer_is_ip6(b3);
 
-    classl20 = ~((classip0>0) & (classipv60>0));
-    classl21 = ~((classip1>0) & (classipv61>0));
-    classl22 = ~((classip2>0) & (classipv62>0));
-    classl23 = ~((classip3>0) & (classipv63>0));
+    classl20 = ~((classip0>0) | (classipv60>0));
+    classl21 = ~((classip1>0) | (classipv61>0));
+    classl22 = ~((classip2>0) | (classipv62>0));
+    classl23 = ~((classip3>0) | (classipv63>0));
 
     modulo0 = (hash0)%TABLESIZE;
     modulo1 = (hash1)%TABLESIZE;
@@ -525,7 +561,7 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
     if (classip0){
       pktlen0 = COST_IP;
     } else if (classipv60){
-      pktlen0 = COST_IP6; 
+      pktlen0 = COST_IP6;
     } else if (classl20){
       pktlen0 = COST_L2;
     }
@@ -558,6 +594,7 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
     drop1 = fq(modulo1,hash1,pktlen1);
     drop2 = fq(modulo2,hash2,pktlen2);
     drop3 = fq(modulo3,hash3,pktlen3);
+
     if(PREDICT_FALSE(drop0 == 1)){
         next0 = VNET_DEVICE_INPUT_NEXT_DROP;
         error0 = DPDK_ERROR_IP_CHECKSUM_ERROR;
@@ -674,11 +711,11 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
     classip0 = vlib_buffer_is_ip4(b0);
     classipv60 = vlib_buffer_is_ip6(b0);
     classl20 = ~((classip0>0) & (classipv60>0));
-        
+
     if (classip0){
       pktlen0 = COST_IP;
     } else if (classipv60){
-      pktlen0 = COST_IP6; 
+      pktlen0 = COST_IP6;
     } else if (classl20){
       pktlen0 = COST_L2;
     }
