@@ -339,6 +339,8 @@ dpdk_prefetch_ethertype (struct rte_mbuf *mb)
    efectively saving on register load operations.
 */
 
+static int dropcounter=0;
+static long dropcount[25] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 static_always_inline void
 dpdk_buffer_init_from_template (void *d0, void *d1, void *d2, void *d3,
 				void *s)
@@ -428,7 +430,6 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
     u8 classipv60, classipv61, classipv62, classipv63;
     u8 classl20, classl21, classl22, classl23;
     u8 first=1;
-    u8 initfirst=1;
 //////////////////////////////////////////////
 
 
@@ -608,10 +609,40 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
     drop2 = fq(modulo2,hash2,pktlen2);
     drop3 = fq(modulo3,hash3,pktlen3);
 
+    //should be dropcount[pkttypeID++] and fq(modulo,hash,packetlen[pkttypeID])
+    //but since the per cycle cost are bounded (in the current settings...)
+    if(PREDICT_FALSE(drop0 == 1)){
+    dropcount[pktlen0]++;
+        next0 = VNET_DEVICE_INPUT_NEXT_DROP;
+        error0 = DPDK_ERROR_IP_CHECKSUM_ERROR;
+        b0->error = node->errors[error0];
+    }
+    if(PREDICT_FALSE(drop1 == 1)){
+    dropcount[pktlen1]++;
+        next1 = VNET_DEVICE_INPUT_NEXT_DROP;
+        error1 = DPDK_ERROR_IP_CHECKSUM_ERROR;
+        b1->error = node->errors[error1];
+    }
+    if(PREDICT_FALSE(drop2 == 1)){
+    dropcount[pktlen2]++;
+        next2 = VNET_DEVICE_INPUT_NEXT_DROP;
+        error2 = DPDK_ERROR_IP_CHECKSUM_ERROR;
+        b2->error = node->errors[error2];
+    }
+    if(PREDICT_FALSE(drop3 == 1)){
+    dropcount[pktlen3]++;
+        next3 = VNET_DEVICE_INPUT_NEXT_DROP;
+        error3 = DPDK_ERROR_IP_CHECKSUM_ERROR;
+        b3->error = node->errors[error3];
+    }
+
 
 
     #ifndef NOLOG
-    ELOG_TYPE_DECLARE (e) = {
+    dropcounter +=4;
+    if (dropcounter % 1000000) {
+      /*-
+    ELOG_TYPE_DECLARE (e) = {        
         .format = "T:%u; (T-t0):%u; First:%u; Drop:[%d,%d,%d,%d]",
         .format_args = "i4i4i1i1i1i1i1",
     };
@@ -625,33 +656,21 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
     ed->d1 = drop1;
     ed->d2 = drop2;
     ed->d3 = drop3;
-
-    initfirst=first;
-
+  */
+    ELOG_TYPE_DECLARE (e) = {        
+        .format = "Tot: %d Drop: %d %d %d",
+        .format_args = "i4i4i4i4",
+    };
+    struct { u32 tot, d1,d2,d3; } * ed;
+    ed = ELOG_DATA (&vm->elog_main, e);
+    ed->tot = dropcounter;
+    ed->d1 = dropcount[COST_L2];
+    ed->d2 = dropcount[COST_IP];
+    ed->d3 = dropcount[COST_IP6];
+    }
     #endif
     // Here I can show the drops
 
-
-    if(PREDICT_FALSE(drop0 == 1)){
-        next0 = VNET_DEVICE_INPUT_NEXT_DROP;
-        error0 = DPDK_ERROR_IP_CHECKSUM_ERROR;
-        b0->error = node->errors[error0];
-    }
-    if(PREDICT_FALSE(drop1 == 1)){
-        next1 = VNET_DEVICE_INPUT_NEXT_DROP;
-        error1 = DPDK_ERROR_IP_CHECKSUM_ERROR;
-        b1->error = node->errors[error1];
-    }
-    if(PREDICT_FALSE(drop2 == 1)){
-        next2 = VNET_DEVICE_INPUT_NEXT_DROP;
-        error2 = DPDK_ERROR_IP_CHECKSUM_ERROR;
-        b2->error = node->errors[error2];
-    }
-    if(PREDICT_FALSE(drop3 == 1)){
-        next3 = VNET_DEVICE_INPUT_NEXT_DROP;
-        error3 = DPDK_ERROR_IP_CHECKSUM_ERROR;
-        b3->error = node->errors[error3];
-    }
 ///////////////////////////////////////////////
 
 	  vlib_buffer_advance (b0, device_input_next_node_advance[next0]);
@@ -758,7 +777,10 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
     }
 
     drop0 = fq(modulo0,hash0,pktlen0);
+    dropcounter++;    
     if(PREDICT_FALSE(drop0 == 1)){
+        dropcount[pktlen0]++;
+  
         next0 = VNET_DEVICE_INPUT_NEXT_DROP;
         error0 = DPDK_ERROR_IP_CHECKSUM_ERROR;
         b0->error = node->errors[error0];
