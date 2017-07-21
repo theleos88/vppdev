@@ -30,6 +30,8 @@
 #include <dpdk/device/flow_table.h>
 #include <dpdk/device/flow_table_var.h>
 
+#include <vppinfra/elog.h>
+
 /////////////Leos: CPU COSTS/////////////////
 
 /*
@@ -44,12 +46,22 @@
 #define COST_L2   (9);
 */
 
-#define COST_IP   (10)     // Redefine the cost in # UNITS
+#define COST_IP   (10)     // (!! Multiply by 10) Redefine the cost in # UNITS
 #define COST_IP6  (13)     // 1 UNIT = 32 clk cycles
 #define COST_L2   (7)
 
+//#define COST_IP   (400)     // (!! Multiply by 10) Redefine the cost in # UNITS
+//#define COST_IP6  (810)     // 1 UNIT = 32 clk cycles
+//#define COST_L2   (100)
+
 #define DEFAULT_CREDIT (80000)  //Units to reach 1 ms
 
+/*
+    Case: 14.88 Mpps  Line rate
+
+    1 pkt:  67.2 ns     175 clk     5 UNIT
+    1 vec:   17202,2 ns  44728       1280 UNITS
+*/
 
 always_inline u32 get_ts_noswap_from_port(u16 d1, u16 d2){
     u32 swapped;
@@ -416,6 +428,7 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
     u8 classipv60, classipv61, classipv62, classipv63;
     u8 classl20, classl21, classl22, classl23;
     u8 first=1;
+    u8 initfirst=1;
 //////////////////////////////////////////////
 
 
@@ -483,7 +496,7 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
 	  bi3 = vlib_get_buffer_index (vm, b3);
 
 
-        t=get_ts_from_mac(b0);
+        //t=get_ts_from_mac(b0);
         //Leonardo, fetch first vector
         //printf("PARSING | t %u old_t %u\n", (uint32_t) t,  (uint32_t) old_t );
         if (first){
@@ -594,6 +607,30 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
     drop1 = fq(modulo1,hash1,pktlen1);
     drop2 = fq(modulo2,hash2,pktlen2);
     drop3 = fq(modulo3,hash3,pktlen3);
+
+
+
+    #ifndef NOLOG
+    ELOG_TYPE_DECLARE (e) = {
+        .format = "T:%u; (T-t0):%u; First:%u; Drop:[%d,%d,%d,%d]",
+        .format_args = "i4i4i1i1i1i1i1",
+    };
+    struct { u32 t, cr;
+             u8 f, d0,d1,d2,d3; } * ed;
+    ed = ELOG_DATA (&vm->elog_main, e);
+    ed->t = t;
+    ed->cr = old_t-t;
+    ed->f = (first!=initfirst);
+    ed->d0 = drop0;
+    ed->d1 = drop1;
+    ed->d2 = drop2;
+    ed->d3 = drop3;
+
+    initfirst=first;
+
+    #endif
+    // Here I can show the drops
+
 
     if(PREDICT_FALSE(drop0 == 1)){
         next0 = VNET_DEVICE_INPUT_NEXT_DROP;
