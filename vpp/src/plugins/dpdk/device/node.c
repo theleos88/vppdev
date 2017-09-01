@@ -46,13 +46,16 @@
 #define COST_L2   (9);
 */
 
+/*
 #define COST_IP   (10)     // (!! Multiply by 10) Redefine the cost in # UNITS
 #define COST_IP6  (13)     // 1 UNIT = 32 clk cycles
 #define COST_L2   (7)
+*/
 
-//#define COST_IP   (400)     // (!! Multiply by 10) Redefine the cost in # UNITS
-//#define COST_IP6  (810)     // 1 UNIT = 32 clk cycles
-//#define COST_L2   (100)
+#define FAKECOSTS
+#define COST_IP   (1)     // (!! IP6 is 10x IP4) Redefine the cost in # UNITS
+#define COST_IP6  (22)     // 1 UNIT = 32 clk cycles
+#define COST_L2   (7)
 
 #define DEFAULT_CREDIT (80000)  //Units to reach 1 ms
 
@@ -339,8 +342,8 @@ dpdk_prefetch_ethertype (struct rte_mbuf *mb)
    efectively saving on register load operations.
 */
 
-static int dropcounter=0;
-static long dropcount[25] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+static int dropcounter=1000;
+static long dropcount[50] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 static_always_inline void
 dpdk_buffer_init_from_template (void *d0, void *d1, void *d2, void *d3,
 				void *s)
@@ -612,7 +615,7 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
     //should be dropcount[pkttypeID++] and fq(modulo,hash,packetlen[pkttypeID])
     //but since the per cycle cost are bounded (in the current settings...)
     if(PREDICT_FALSE(drop0 == 1)){
-    dropcount[pktlen0]++;
+      dropcount[pktlen0]++;
         next0 = VNET_DEVICE_INPUT_NEXT_DROP;
         error0 = DPDK_ERROR_IP_CHECKSUM_ERROR;
         b0->error = node->errors[error0];
@@ -639,35 +642,38 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
 
 
     #ifndef NOLOG
+    //nonsns
+
     dropcounter +=4;
-    if (dropcounter % 1000000) {
-      /*-
-    ELOG_TYPE_DECLARE (e) = {        
-        .format = "T:%u; (T-t0):%u; First:%u; Drop:[%d,%d,%d,%d]",
-        .format_args = "i4i4i1i1i1i1i1",
-    };
-    struct { u32 t, cr;
-             u8 f, d0,d1,d2,d3; } * ed;
-    ed = ELOG_DATA (&vm->elog_main, e);
-    ed->t = t;
-    ed->cr = old_t-t;
-    ed->f = (first!=initfirst);
-    ed->d0 = drop0;
-    ed->d1 = drop1;
-    ed->d2 = drop2;
-    ed->d3 = drop3;
-  */
-    ELOG_TYPE_DECLARE (e) = {        
-        .format = "Tot: %d Drop: %d %d %d",
-        .format_args = "i4i4i4i4",
-    };
-    struct { u32 tot, d1,d2,d3; } * ed;
-    ed = ELOG_DATA (&vm->elog_main, e);
-    ed->tot = dropcounter;
-    ed->d1 = dropcount[COST_L2];
-    ed->d2 = dropcount[COST_IP];
-    ed->d3 = dropcount[COST_IP6];
-    }
+    //if (dropcounter <= 0) {
+    //   dropcounter=4;
+          /*-
+        ELOG_TYPE_DECLARE (e) = {        
+            .format = "T:%u; (T-t0):%u; First:%u; Drop:[%d,%d,%d,%d]",
+            .format_args = "i4i4i1i1i1i1i1",
+        };
+        struct { u32 t, cr;
+                 u8 f, d0,d1,d2,d3; } * ed;
+        ed = ELOG_DATA (&vm->elog_main, e);
+        ed->t = t;
+        ed->cr = old_t-t;
+        ed->f = (first!=initfirst);
+        ed->d0 = drop0;
+        ed->d1 = drop1;
+        ed->d2 = drop2;
+        ed->d3 = drop3;
+      */
+        ELOG_TYPE_DECLARE (e) = {        
+            .format = "Tot: %d Drop: %d %d %d",
+            .format_args = "i4i4i4i4",
+        };
+        struct { u32 tot, d1,d2,d3; } * ed;
+        ed = ELOG_DATA (&vm->elog_main, e);
+        ed->tot = dropcounter;
+        ed->d1 = t ;;// - old_t; // dropcount[COST_L2];
+        ed->d2 = dropcount[COST_IP];
+        ed->d3 = dropcount[COST_IP6];
+    // }
     #endif
     // Here I can show the drops
 
@@ -831,7 +837,7 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
 
   /*vstate update*/
   //old_t = t;
-  //t = (u64)(unix_time_now_nsec ());
+  // t = (u64)(unix_time_now_nsec ());
 
 
     departure();
