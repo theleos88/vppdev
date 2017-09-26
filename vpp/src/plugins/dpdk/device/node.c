@@ -27,7 +27,7 @@
 #include <vnet/feature/feature.h>
 
 #include <dpdk/device/dpdk_priv.h>
-#include <dpdk/device/flow_table.h>
+#include <dpdk/device/flow_table_cpu.h>
 #include <dpdk/device/flow_table_var.h>
 
 #include <vppinfra/elog.h>
@@ -603,10 +603,10 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
       pktlen3 = COST_L2;
     }
 
-    drop0 = fq(modulo0,hash0,pktlen0);
-    drop1 = fq(modulo1,hash1,pktlen1);
-    drop2 = fq(modulo2,hash2,pktlen2);
-    drop3 = fq(modulo3,hash3,pktlen3);
+    drop0 = fq(classip0,classip60,classl20,pktlen0);
+    drop1 = fq(classip1,classip61,classl21,pktlen1);
+    drop2 = fq(classip2,classip62,classl22,pktlen2);
+    drop3 = fq(classip3,classip63,classl23,pktlen3);
 
 
 
