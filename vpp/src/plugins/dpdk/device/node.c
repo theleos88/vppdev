@@ -418,8 +418,6 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
       u64 or_ol_flags;
 
 //////////////////////////////////////////////
-    u64 hash0,hash1,hash2,hash3;
-    u32 modulo0,modulo1,modulo2,modulo3;
     u16 pktlen0,pktlen1,pktlen2,pktlen3;
     u8  drop0,drop1,drop2,drop3 ;
 
@@ -545,10 +543,6 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
       // Leonardo: pay Attention to vlib_buffer_advance !
       //////////////////End of Get mac/////////////////////////////
 ////////////////////////////////////////////
-    hash0 = (unsigned)mb0->hash.rss;
-    hash1 = (unsigned)mb1->hash.rss;
-    hash2 = (unsigned)mb2->hash.rss;
-    hash3 = (unsigned)mb3->hash.rss;
 
     //LEOS class = vlib_buffer_is_ip4(b0);
     classip0 = vlib_buffer_is_ip4(b0);
@@ -566,10 +560,6 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
     classl22 = ~((classip2>0) | (classipv62>0));
     classl23 = ~((classip3>0) | (classipv63>0));
 
-    modulo0 = (hash0)%TABLESIZE;
-    modulo1 = (hash1)%TABLESIZE;
-    modulo2 = (hash2)%TABLESIZE;
-    modulo3 = (hash3)%TABLESIZE;
 
     if (classip0){
       pktlen0 = COST_IP;
