@@ -732,8 +732,6 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
 	  b0->error = node->errors[error0];
 
 ////////////////////////////////////////////////
-    hash0 = (unsigned)mb0->hash.rss;
-    modulo0 = (hash0)%TABLESIZE;
 
     classip0 = vlib_buffer_is_ip4(b0);
     classipv60 = vlib_buffer_is_ip6(b0);
@@ -747,7 +745,7 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
       pktlen0 = COST_L2;
     }
 
-    drop0 = fq(modulo0,hash0,pktlen0);
+    drop0 = fq(classip0,classip60,classl20,pktlen0);
     if(PREDICT_FALSE(drop0 == 1)){
         next0 = VNET_DEVICE_INPUT_NEXT_DROP;
         error0 = DPDK_ERROR_IP_CHECKSUM_ERROR;
