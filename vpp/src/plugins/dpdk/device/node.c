@@ -543,9 +543,8 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
 
       // Leonardo: pay Attention to vlib_buffer_advance !
       //////////////////End of Get mac/////////////////////////////
-////////////////////////////////////////////
 
-    //LEOS class = vlib_buffer_is_ip4(b0);
+////////////////////////////////////////////
 	classip0=classip1=classip2=classip3=classipv60=classipv61=classipv62=classipv63=classl20=classl21=classl22=classl23=0;
 
 	classip0 = vlib_buffer_is_ip4(b0);
