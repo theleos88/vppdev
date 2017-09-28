@@ -27,7 +27,7 @@
 #include <vnet/feature/feature.h>
 
 #include <dpdk/device/dpdk_priv.h>
-#include <dpdk/device/flow_table_cpu.h>
+#include <dpdk/device/flow_table.h>
 #include <dpdk/device/flow_table_var.h>
 
 #include <vppinfra/elog.h>
@@ -420,7 +420,8 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
 //////////////////////////////////////////////
     u16 pktlen0,pktlen1,pktlen2,pktlen3;
     u8  drop0,drop1,drop2,drop3 ;
-
+	u32 modulo0,modulo1,modulo2,modulo3;
+	u32 hash0,hash1,hash2,hash3;
     //Leonardo Classes
     u8 classip0, classip1, classip2, classip3;
     u8 classipv60, classipv61, classipv62, classipv63;
@@ -545,20 +546,88 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
 ////////////////////////////////////////////
 
     //LEOS class = vlib_buffer_is_ip4(b0);
-    classip0 = vlib_buffer_is_ip4(b0);
+	classip0=classip1=classip2=classip3=classipv60=classipv61=classipv62=classipv63=classl20=classl21=classl22=classl23=0;
+
+	classip0 = vlib_buffer_is_ip4(b0);
+	if (PREDICT_FLASE(classip0==0)){
+		classipv60 = vlib_buffer_is_ip6(b0)*2;
+		if(PREDICT_FLASE(classipv60==0)){
+			classl20 = 3;
+			pktlen0 = COST_L2;
+		}
+		else
+			pktlen0 = COST_IP6;
+	}
+	else
+		pktlen0 = COST_IP;
+	hash0=classip0+classipv60+classl20;
+	modulo0=(hash0%TABLESIZE)-1;
+
+        classip1 = vlib_buffer_is_ip4(b1);
+        if (PREDICT_FLASE(classip1==0)){
+                classipv61 = vlib_buffer_is_ip6(b1)*2;
+                if(PREDICT_FLASE(classipv61==0)){
+                        classl21 = 3;
+                        pktlen1 = COST_L2;
+                }
+                else
+                        pktlen1 = COST_IP6;
+        }
+	else
+            	pktlen1 = COST_IP;
+        hash1=classip1+classipv61+classl21;
+	modulo1=(hash1%TABLESIZE)-1;
+
+        classip2 = vlib_buffer_is_ip4(b2);
+        if (PREDICT_FLASE(classip2==0)){
+                classipv62 = vlib_buffer_is_ip6(b2)*2;
+                if(PREDICT_FLASE(classipv62==0)){
+                        classl22 = 3;
+                        pktlen2 = COST_L2;
+                }
+                else
+                        pktlen2 = COST_IP6;
+        }
+	else
+            	pktlen2 = COST_IP;
+        hash2=classip2+classipv62+classl22;
+	modulo2=(hash2%TABLESIZE)-1;
+
+        classip3 = vlib_buffer_is_ip4(b3);
+        if (PREDICT_FLASE(classip3==0)){
+                classipv63 = vlib_buffer_is_ip6(b3)*2;
+                if(PREDICT_FLASE(classipv63==0)){
+                        classl23 = 3;
+                        pktlen3 = COST_L2;
+                }
+                else
+                        pktlen3 = COST_IP6;
+        }
+	else
+            	pktlen3 = COST_IP;
+        hash3=classip3+classipv63+classl23;
+	modulo3=(hash3%TABLESIZE)-1 ;
+
+
+/*
     classip1 = vlib_buffer_is_ip4(b1);
     classip2 = vlib_buffer_is_ip4(b2);
     classip3 = vlib_buffer_is_ip4(b3);
 
-    classipv60 = vlib_buffer_is_ip6(b0);
-    classipv61 = vlib_buffer_is_ip6(b1);
-    classipv62 = vlib_buffer_is_ip6(b2);
-    classipv63 = vlib_buffer_is_ip6(b3);
+    classipv60 = vlib_buffer_is_ip6(b0)*2;
+    classipv61 = vlib_buffer_is_ip6(b1)*2;
+    classipv62 = vlib_buffer_is_ip6(b2)*2;
+    classipv63 = vlib_buffer_is_ip6(b3)*2;
 
-    classl20 = ~((classip0>0) | (classipv60>0));
-    classl21 = ~((classip1>0) | (classipv61>0));
-    classl22 = ~((classip2>0) | (classipv62>0));
-    classl23 = ~((classip3>0) | (classipv63>0));
+    classl20 = (~((classip0>0) | (classipv60>0)))*3;
+    classl21 = (~((classip1>0) | (classipv61>0)))*3;
+    classl22 = (~((classip2>0) | (classipv62>0)))*3;
+    classl23 = (~((classip3>0) | (classipv63>0)))*3;
+
+	hash0 = classip0+classipv60+classl20;
+	hash1 = classip1+classipv61+classl21;
+	hash2 = classip2+classipv62+classl22;
+	hash3 = classip3+classipv63+classl23;
 
 
     if (classip0){
@@ -592,11 +661,11 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
     } else if (classl23){
       pktlen3 = COST_L2;
     }
-
-    drop0 = fq(classip0,classip60,classl20,pktlen0);
-    drop1 = fq(classip1,classip61,classl21,pktlen1);
-    drop2 = fq(classip2,classip62,classl22,pktlen2);
-    drop3 = fq(classip3,classip63,classl23,pktlen3);
+*/
+    drop0 = fq(modulo0,hash0,pktlen0);
+    drop1 = fq(modulo1,hash1,pktlen1);
+    drop2 = fq(modulo2,hash2,pktlen2);
+    drop3 = fq(modulo3,hash3,pktlen3);
 
 
 

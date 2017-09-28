@@ -24,7 +24,7 @@
 //#define BUFFER 38400000 //just a random number. Update the value with proper theoritical approach.
 #define THRESHOLD (3840000) //just a random number. Update the value with proper theoritical approach.
 
-/*Node in the flow table. srcdst is 64 bit divided as |32bitsrcip|32bitdstip| ; swsrcdstport is divided as |32bit swifindex|16bit srcport|16bit dstport|*/
+/*Node in the flow table. hash is the RSS hash from hardware. vqueue is the bandwidth consumed. Branchnext is for collisions. update is the next branch to be updated.*/
 typedef struct flowcount{
     u32 hash;
     u32 vqueue;
@@ -267,8 +267,7 @@ return drop;
 always_inline u8 fq (u32 modulox, u32 hashx0, u16 pktlenx){
     flowcount_t * i;
     u8 drop;
-    //i = flow_table_classify(modulox,hashx0,pktlenx);
-    i = modulox;
+    i = flow_table_classify(modulox,hashx0,pktlenx);
     drop = arrival(i,pktlenx);
     return drop;
 }
