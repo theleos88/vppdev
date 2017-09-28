@@ -605,7 +605,7 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
 	else
             	pktlen3 = COST_IP;
         hash3=classip3+classipv63+classl23;
-	modulo3=(hash3%TABLESIZE)-1 ;
+	modulo3=(hash3%TABLESIZE)-1;
 
 
 /*
