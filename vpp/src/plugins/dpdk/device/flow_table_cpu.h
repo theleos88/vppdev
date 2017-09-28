@@ -37,7 +37,7 @@ typedef struct activelist{
     struct activelist * next;
 }activelist_t;
 
-extern flowcount_t *  nodet[3];
+extern flowcount_t *  nodet[TABLESIZE];
 extern activelist_t * head_af;
 extern activelist_t * tail_af;
 extern flowcount_t *  head ;
@@ -49,25 +49,12 @@ extern u64 old_t;
 
 /* Flow classification function */
 always_inline flowcount_t *
-flow_table_classify(u8 classip4, u8 classip6, u8 classl2, u16 pktlenx){
+flow_table_classify(u32 modulox,u32 hashx, u16 pktlenx){
 
     flowcount_t * flow;
-
-    if (classip4){
-	if(PREDICT_FALSE(nodet[0]==NULL))
-        nodet[0] = malloc(sizeof(flowcount_t));
-        flow = nodet[0];
-    }
-    else if (classip6){
-	if(PREDICT_FALSE(nodet[1]==NULL))
-        nodet[1] = malloc(sizeof(flowcount_t));
-        flow = nodet[1];
-    }
-    else if (classl2){
-	if(PREDICT_FALSE(nodet[2]==NULL))
-        nodet[2] = malloc(sizeof(flowcount_t));
-        flow = nodet[2];
-    }
+	if(PREDICT_FALSE(nodet[modulox]==NULL))
+        	nodet[modulox] = malloc(sizeof(flowcount_t));
+        flow = nodet[modulox];
     return flow;
 }
 

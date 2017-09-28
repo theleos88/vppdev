@@ -1,5 +1,5 @@
 #include <dpdk/device/flow_table.h>
-flowcount_t *  nodet[3] ;
+flowcount_t *  nodet[TABLESIZE] ;
 activelist_t * head_af;
 activelist_t * tail_af;
 flowcount_t *  head ;
