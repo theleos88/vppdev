@@ -34,6 +34,7 @@
 //#include <time.h>
 
 
+
 static char *dpdk_error_strings[] = {
 #define _(n,s) s,
   foreach_dpdk_error
@@ -579,7 +580,8 @@ poll_rate_limit (dpdk_main_t * dm)
       struct timespec ts, tsrem;
 
       ts.tv_sec = 0;
-      ts.tv_nsec = 1000 * dm->poll_sleep_usec;
+      ts.tv_nsec = 1000 * dm->poll_sleep_usec; 
+      //ts.tv_nsec = 1000 * 13; //Leonardo, v1, sleeping for 13 us, always
 
       while (nanosleep (&ts, &tsrem) < 0)
 	{
@@ -638,8 +640,9 @@ dpdk_input (vlib_main_t * vm, vlib_node_runtime_t * node, vlib_frame_t * f)
   dpdk_device_and_queue_t *dq;
   u32 cpu_index = os_get_cpu_number ();
 
-  //Leonardo
+ //Leonardo
   u64 clk;
+  //poll_rate_limit (dm);
 
   /*
    * Poll all devices on this cpu for input/interrupts.
@@ -657,7 +660,16 @@ dpdk_input (vlib_main_t * vm, vlib_node_runtime_t * node, vlib_frame_t * f)
 
   poll_rate_limit (dm);
 
+
   //Leonardo
+  //#ifdef ALWAYS_SLEEP
+  //struct timespec ts; //, tsrem;
+  //ts.tv_sec = 0;
+  //ts.tv_nsec = ( (500.0*( VLIB_FRAME_SIZE - n_rx_packets) ) / VLIB_FRAME_SIZE ); //Leonardo, v2, sleeping for 2 us, always
+  //ts.tv_nsec = ( 1 ); //Leonardo, v3, 1 ns
+  //clock_nanosleep(CLOCK_REALTIME, 0, &ts, NULL);
+  //#endif
+
   clk = rte_rdtsc();
 
 
