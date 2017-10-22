@@ -212,6 +212,31 @@ vlib_thread_init (vlib_main_t * vm)
 	}
     }
 
+#ifdef SCHED_ENABLE
+	struct sched_attr dl_params;
+	int retv=0;
+
+	retv = sched_getattr(0, &dl_params, sizeof(struct sched_attr), 0);
+	if(retv < 0){
+		exit(1);
+	}
+
+	dl_params.size = sizeof(struct sched_attr);
+	dl_params.sched_flags = 0;
+	dl_params.sched_policy = SCHED_DEADLINE;
+	dl_params.sched_runtime = 1024*2;
+	dl_params.sched_deadline = 1024*5;
+	dl_params.sched_period = 1024*8;
+
+	retv = sched_setattr(0, &dl_params, 0);
+	if (retv < 0) {
+		exit(EXIT_FAILURE);
+	}
+
+#endif
+
+
+
   /* assign threads to cores and set n_vlib_mains */
   tr = tm->next;
 

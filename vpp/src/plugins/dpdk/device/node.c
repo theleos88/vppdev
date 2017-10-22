@@ -642,6 +642,7 @@ dpdk_input (vlib_main_t * vm, vlib_node_runtime_t * node, vlib_frame_t * f)
 
  //Leonardo
   u64 clk;
+  sched_yield();
   //poll_rate_limit (dm);
 
   /*
@@ -658,10 +659,9 @@ dpdk_input (vlib_main_t * vm, vlib_node_runtime_t * node, vlib_frame_t * f)
     }
   /* *INDENT-ON* */
 
-  poll_rate_limit (dm);
+  //Leonardo (removed poll_rate_limit from here)
 
 
-  //Leonardo
   //#ifdef ALWAYS_SLEEP
   //struct timespec ts; //, tsrem;
   //ts.tv_sec = 0;
