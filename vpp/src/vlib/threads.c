@@ -25,6 +25,71 @@
 DECLARE_CJ_GLOBAL_LOG;
 
 #define FRAME_QUEUE_NELTS 32
+//Leonardo
+#define SCHED_ENABLE 1
+
+#ifdef SCHED_ENABLE
+#include <sched.h>
+#include <sys/syscall.h>
+#include <errno.h>
+#define gettid() syscall(__NR_gettid)
+
+ #define SCHED_DEADLINE	6
+
+ /* XXX use the proper syscall numbers */
+ #ifdef __x86_64__
+ #define __NR_sched_setattr		314
+ #define __NR_sched_getattr		315
+ #endif
+
+ #ifdef __i386__
+ #define __NR_sched_setattr		351
+ #define __NR_sched_getattr		352
+ #endif
+
+ #ifdef __arm__
+ #define __NR_sched_setattr		380
+ #define __NR_sched_getattr		381
+ #endif
+
+ static volatile int done;
+
+ struct sched_attr {
+	u32 size;
+
+	u32 sched_policy;
+	u64 sched_flags;
+
+	/* SCHED_NORMAL, SCHED_BATCH */
+	int sched_nice;
+
+	/* SCHED_FIFO, SCHED_RR */
+	u32 sched_priority;
+
+	/* SCHED_DEADLINE (nsec) */
+	u64 sched_runtime;
+	u64 sched_deadline;
+	u64 sched_period;
+ };
+
+ int sched_setattr(pid_t pid,
+		  const struct sched_attr *attr,
+		  unsigned int flags)
+ {
+	return syscall(__NR_sched_setattr, pid, attr, flags);
+ }
+
+ int sched_getattr(pid_t pid,
+		  struct sched_attr *attr,
+		  unsigned int size,
+		  unsigned int flags)
+ {
+	return syscall(__NR_sched_getattr, pid, attr, size, flags);
+ }
+#endif
+
+
+
 
 u32
 vl (void *p)
@@ -218,6 +283,8 @@ vlib_thread_init (vlib_main_t * vm)
 
 	retv = sched_getattr(0, &dl_params, sizeof(struct sched_attr), 0);
 	if(retv < 0){
+		printf("ERROR CODE: %d in get", retv);
+		//clib_error_return(retv, "Can't get attributes. ERRCODE: %d", retv);
 		exit(1);
 	}
 
@@ -230,7 +297,9 @@ vlib_thread_init (vlib_main_t * vm)
 
 	retv = sched_setattr(0, &dl_params, 0);
 	if (retv < 0) {
-		exit(EXIT_FAILURE);
+		printf("ERROR CODE: %d in set. BIG %d Busy %d INVAL %d PERM  %d SRCH %d", errno, E2BIG, EBUSY, EINVAL, EPERM, ESRCH);
+		//return clib_error_return(0, "Can't set attributes. ERRCODE: %d", retv);
+		exit(1);
 	}
 
 #endif
