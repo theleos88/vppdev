@@ -65,6 +65,7 @@
 extern vnet_device_class_t dpdk_device_class;
 extern vlib_node_registration_t dpdk_input_node;
 extern vlib_node_registration_t handoff_dispatch_node;
+//extern vlib_node_registration_t fairdrop_process_node;
 
 #if RTE_VERSION >= RTE_VERSION_NUM(17, 2, 0, 0)
 #define foreach_dpdk_pmd          \
