@@ -1,9 +1,14 @@
+
 #include <sched.h>
 #include <sys/syscall.h>
 #include <errno.h>
+
 #define gettid() syscall(__NR_gettid)
+#define FATAL_ERROR(fmt, args...)       (printf( fmt "\n", ##args))
+#define CPU_SET_NAME	"vppcpuset"
 
  #define SCHED_DEADLINE	6
+ #define STATIC_NUMA_NODE 0
 
  /* XXX use the proper syscall numbers */
  #ifdef __x86_64__
@@ -41,6 +46,8 @@
 	uint64_t sched_period;
  };
 
+/*
+
  int sched_setattr(pid_t pid,
 		  const struct sched_attr *attr,
 		  unsigned int flags)
@@ -55,3 +62,6 @@
  {
 	return syscall(__NR_sched_getattr, pid, attr, size, flags);
  }
+*/
+
+

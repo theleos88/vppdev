@@ -1,3 +1,6 @@
+#define _GNU_SOURCE
+/*Leonardo. This should make it work with sched_setaffinity*/
+
 /*
  * Copyright (c) 2015 Cisco and/or its affiliates.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -41,6 +44,12 @@
 #include <vppinfra/format.h>
 #include <vlib/vlib.h>
 #include <vlib/threads.h>
+
+//Leonardo, sched_dead
+#define ENABLE_DEADLINE 1
+#include "vlib/deadline.h"
+
+
 
 #include <vlib/unix/cj.h>
 
@@ -1406,6 +1415,55 @@ dispatch_suspended_process (vlib_main_t * vm,
   return t;
 }
 
+
+void set_scheduling_policy_and_affinity(int current_core){
+
+  struct sched_attr sc_attr;
+  uint64_t mask;
+  char * cpu_set_name = strdup(CPU_SET_NAME);
+  char dir_command [1000];
+  int ret;
+
+  //TODO: Problem may arise
+  int numa_node_id = STATIC_NUMA_NODE;
+
+  /* Remove affinity set atomatically by DPDK by setting affinity to all cores */
+  mask = 0xFFFFFFFFFFFFFFFF;
+  ret = sched_setaffinity(0, sizeof(mask), (cpu_set_t*)&mask);
+  if (ret != 0) FATAL_ERROR("Error: cannot set affinity. Quitting...\n");
+
+  /* Set affinity by means of cpuset (the only way to have affinity with SCHED_DEADLINE).*/ 
+  /* NOTE: The cpuset MUST have exclusive use of that CPU. Be sure that in you system there are not other CPU sets in conflict */
+  ret = system("mkdir -p /dev/cpuset; mount -t cpuset cpuset /dev/cpuset");           /* Create cpusets directory, if not exist */
+  if (ret != 0){
+    //Nothing
+  }
+
+  cpu_set_name[10] += current_core;                   /* Set name of new cpuset */
+  cpu_set_name[11] += current_core;   
+  sprintf(dir_command, "mkdir -p /dev/cpuset/%s", cpu_set_name);              /* Create the command to create the cpu set ...*/
+  ret = system(dir_command);                          /* ... And execute it */
+  sprintf(dir_command, "/bin/echo %d > /dev/cpuset/%s/cpuset.cpus", current_core, cpu_set_name);        /* Create the command to set preferred CPU of the cpu set... */
+  ret = system(dir_command);                          /* ... And execute it */  
+  sprintf(dir_command, "/bin/echo %d > /dev/cpuset/%s/cpuset.mems", numa_node_id, cpu_set_name);     /* Create the command to set preferred memory on current numa node... */
+  ret =system(dir_command);                          /* ... And execute it */
+  sprintf(dir_command, "/bin/echo 0 > /dev/cpuset/cpuset.sched_load_balance; /bin/echo 1 > /dev/cpuset/cpuset.cpu_exclusive; ");/* Create the command to set random parameters needed by cpuset to work with SCHED_DEADLINE*/
+  ret =system(dir_command);                          /* ... And execute it */
+  sprintf(dir_command, "/bin/echo %ld > /dev/cpuset/%s/tasks", syscall(SYS_gettid), cpu_set_name);    /* Create command to put current thread in cpuset... */
+  ret =system(dir_command);                          /* ... And execute it */
+
+  /* Set up SCHED_DEADLINE policy */
+  sc_attr.size = sizeof(struct sched_attr);
+  sc_attr.sched_policy = SCHED_DEADLINE;
+  sc_attr.sched_runtime =  1024*7;
+  sc_attr.sched_deadline = 1024*10;
+  sc_attr.sched_period = 1024*15;
+  ret = syscall(__NR_sched_setattr,0, &sc_attr, 0);
+  if (ret != 0) FATAL_ERROR("Cannot set thread scheduling policy. Ret code=%d Errno=%d (EINVAL=%d ESRCH=%d E2BIG=%d EINVAL=%d E2BIG=%d EBUSY=%d EINVAL=%d EPERM=%d). Quitting...\n",ret, errno, EINVAL, ESRCH , E2BIG, EINVAL ,E2BIG, EBUSY, EINVAL, EPERM);
+
+}
+
+
 static_always_inline void
 vlib_main_or_worker_loop (vlib_main_t * vm, int is_main)
 {
@@ -1441,6 +1499,15 @@ vlib_main_or_worker_loop (vlib_main_t * vm, int is_main)
 			 cpu_time_now, vm->clib_time.clocks_per_second);
       vec_alloc (nm->data_from_advancing_timing_wheel, 32);
     }
+
+
+  #ifdef ENABLE_DEADLINE
+  if (is_main)
+  {
+    set_scheduling_policy_and_affinity(os_get_cpu_number());
+  }
+  #endif
+
 
   /* Pre-allocate expired nodes. */
   vec_alloc (nm->pending_interrupt_node_runtime_indices, 32);
