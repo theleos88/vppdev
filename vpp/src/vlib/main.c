@@ -44,6 +44,8 @@
 
 #include <vlib/unix/cj.h>
 
+#include <plugins/dpdk/device/fairdrop.h>
+#include <plugins/dpdk/device/flow_table_var.h>
 CJ_GLOBAL_LOG_PROTOTYPE;
 
 /* Actually allocate a few extra slots of vector data to support
@@ -91,7 +93,7 @@ vlib_frame_find_magic (vlib_frame_t * f, vlib_node_t * node)
 
 static vlib_frame_size_t *
 get_frame_size_info (vlib_node_main_t * nm,
-		     u32 n_scalar_bytes, u32 n_vector_bytes)
+         u32 n_scalar_bytes, u32 n_vector_bytes)
 {
   uword key = (n_scalar_bytes << 16) | n_vector_bytes;
   uword *p, i;
@@ -111,7 +113,7 @@ get_frame_size_info (vlib_node_main_t * nm,
 
 static u32
 vlib_frame_alloc_to_node (vlib_main_t * vm, u32 to_node_index,
-			  u32 frame_flags)
+        u32 frame_flags)
 {
   vlib_node_main_t *nm = &vm->node_main;
   vlib_frame_size_t *fs;
@@ -172,7 +174,7 @@ vlib_frame_alloc_to_node (vlib_main_t * vm, u32 to_node_index,
    Returns frame index. */
 static u32
 vlib_frame_alloc (vlib_main_t * vm, vlib_node_runtime_t * from_node_runtime,
-		  u32 to_next_index)
+      u32 to_next_index)
 {
   vlib_node_t *from_node;
 
@@ -180,15 +182,15 @@ vlib_frame_alloc (vlib_main_t * vm, vlib_node_runtime_t * from_node_runtime,
   ASSERT (to_next_index < vec_len (from_node->next_nodes));
 
   return vlib_frame_alloc_to_node (vm, from_node->next_nodes[to_next_index],
-				   /* frame_flags */ 0);
+           /* frame_flags */ 0);
 }
 
 vlib_frame_t *
 vlib_get_frame_to_node (vlib_main_t * vm, u32 to_node_index)
 {
   u32 fi = vlib_frame_alloc_to_node (vm, to_node_index,
-				     /* frame_flags */
-				     VLIB_FRAME_FREE_AFTER_DISPATCH);
+             /* frame_flags */
+             VLIB_FRAME_FREE_AFTER_DISPATCH);
   return vlib_get_frame (vm, fi);
 }
 
@@ -234,7 +236,7 @@ vlib_frame_free (vlib_main_t * vm, vlib_node_runtime_t * r, vlib_frame_t * f)
     {
       vlib_next_frame_t *nf;
       vec_foreach (nf, vm->node_main.next_frames)
-	ASSERT (nf->frame_index != frame_index);
+  ASSERT (nf->frame_index != frame_index);
     }
 
   f->flags &= ~VLIB_FRAME_IS_ALLOCATED;
@@ -246,7 +248,7 @@ vlib_frame_free (vlib_main_t * vm, vlib_node_runtime_t * r, vlib_frame_t * f)
 
 static clib_error_t *
 show_frame_stats (vlib_main_t * vm,
-		  unformat_input_t * input, vlib_cli_command_t * cmd)
+      unformat_input_t * input, vlib_cli_command_t * cmd)
 {
   vlib_node_main_t *nm = &vm->node_main;
   vlib_frame_size_t *fs;
@@ -259,7 +261,7 @@ show_frame_stats (vlib_main_t * vm,
 
     if (n_alloc + n_free > 0)
       vlib_cli_output (vm, "%=6d%=12d%=12d",
-		       fs - nm->frame_sizes, n_alloc, n_free);
+           fs - nm->frame_sizes, n_alloc, n_free);
   }
 
   return 0;
@@ -276,8 +278,8 @@ VLIB_CLI_COMMAND (show_frame_stats_cli, static) = {
 /* Change ownership of enqueue rights to given next node. */
 static void
 vlib_next_frame_change_ownership (vlib_main_t * vm,
-				  vlib_node_runtime_t * node_runtime,
-				  u32 next_index)
+          vlib_node_runtime_t * node_runtime,
+          u32 next_index)
 {
   vlib_node_main_t *nm = &vm->node_main;
   vlib_next_frame_t *next_frame;
@@ -287,8 +289,8 @@ vlib_next_frame_change_ownership (vlib_main_t * vm,
 
   /* Only internal & input nodes are allowed to call other nodes. */
   ASSERT (node->type == VLIB_NODE_TYPE_INTERNAL
-	  || node->type == VLIB_NODE_TYPE_INPUT
-	  || node->type == VLIB_NODE_TYPE_PROCESS);
+    || node->type == VLIB_NODE_TYPE_INPUT
+    || node->type == VLIB_NODE_TYPE_PROCESS);
 
   ASSERT (vec_len (node->next_nodes) == node_runtime->n_next_nodes);
 
@@ -303,9 +305,9 @@ vlib_next_frame_change_ownership (vlib_main_t * vm,
       vlib_next_frame_t tmp;
 
       owner_next_frame =
-	vlib_node_get_next_frame (vm,
-				  next_node->owner_node_index,
-				  next_node->owner_next_index);
+  vlib_node_get_next_frame (vm,
+          next_node->owner_node_index,
+          next_node->owner_next_index);
 
       /* Swap target next frame with owner's. */
       tmp = owner_next_frame[0];
@@ -317,20 +319,20 @@ vlib_next_frame_change_ownership (vlib_main_t * vm,
        * all pending frames and fix their next_frame_index fields.
        */
       if (next_frame->flags & VLIB_FRAME_PENDING)
-	{
-	  vlib_pending_frame_t *p;
-	  if (next_frame->frame_index != ~0)
-	    {
-	      vec_foreach (p, nm->pending_frames)
-	      {
-		if (p->frame_index == next_frame->frame_index)
-		  {
-		    p->next_frame_index =
-		      next_frame - vm->node_main.next_frames;
-		  }
-	      }
-	    }
-	}
+  {
+    vlib_pending_frame_t *p;
+    if (next_frame->frame_index != ~0)
+      {
+        vec_foreach (p, nm->pending_frames)
+        {
+    if (p->frame_index == next_frame->frame_index)
+      {
+        p->next_frame_index =
+          next_frame - vm->node_main.next_frames;
+      }
+        }
+      }
+  }
     }
   else
     {
@@ -350,7 +352,7 @@ vlib_next_frame_change_ownership (vlib_main_t * vm,
    Otherwise, it is likely that caller has overrun frame arguments. */
 always_inline void
 validate_frame_magic (vlib_main_t * vm,
-		      vlib_frame_t * f, vlib_node_t * n, uword next_index)
+          vlib_frame_t * f, vlib_node_t * n, uword next_index)
 {
   vlib_node_t *next_node = vlib_get_node (vm, n->next_nodes[next_index]);
   u32 *magic = vlib_frame_find_magic (f, next_node);
@@ -359,8 +361,8 @@ validate_frame_magic (vlib_main_t * vm,
 
 vlib_frame_t *
 vlib_get_next_frame_internal (vlib_main_t * vm,
-			      vlib_node_runtime_t * node,
-			      u32 next_index, u32 allocate_new_next_frame)
+            vlib_node_runtime_t * node,
+            u32 next_index, u32 allocate_new_next_frame)
 {
   vlib_frame_t *f;
   vlib_next_frame_t *nf;
@@ -396,10 +398,10 @@ vlib_get_next_frame_internal (vlib_main_t * vm,
       /* Old frame may need to be freed after dispatch, since we'll have
          two redundant frames from node -> next node. */
       if (!(nf->flags & VLIB_FRAME_NO_FREE_AFTER_DISPATCH))
-	{
-	  vlib_frame_t *f_old = vlib_get_frame (vm, nf->frame_index);
-	  f_old->flags |= VLIB_FRAME_FREE_AFTER_DISPATCH;
-	}
+  {
+    vlib_frame_t *f_old = vlib_get_frame (vm, nf->frame_index);
+    f_old->flags |= VLIB_FRAME_FREE_AFTER_DISPATCH;
+  }
 
       /* Allocate new frame to replace full one. */
       nf->frame_index = vlib_frame_alloc (vm, node, next_index);
@@ -413,7 +415,7 @@ vlib_get_next_frame_internal (vlib_main_t * vm,
   if (CLIB_DEBUG > 0)
     {
       validate_frame_magic (vm, f,
-			    vlib_get_node (vm, node->node_index), next_index);
+          vlib_get_node (vm, node->node_index), next_index);
     }
 
   return f;
@@ -421,8 +423,8 @@ vlib_get_next_frame_internal (vlib_main_t * vm,
 
 static void
 vlib_put_next_frame_validate (vlib_main_t * vm,
-			      vlib_node_runtime_t * rt,
-			      u32 next_index, u32 n_vectors_left)
+            vlib_node_runtime_t * rt,
+            u32 next_index, u32 n_vectors_left)
 {
   vlib_node_main_t *nm = &vm->node_main;
   vlib_next_frame_t *nf;
@@ -441,24 +443,24 @@ vlib_put_next_frame_validate (vlib_main_t * vm,
   ASSERT (n_after >= n_before);
 
   next_rt = vec_elt_at_index (nm->nodes_by_type[VLIB_NODE_TYPE_INTERNAL],
-			      nf->node_runtime_index);
+            nf->node_runtime_index);
   next_node = vlib_get_node (vm, next_rt->node_index);
   if (n_after > 0 && next_node->validate_frame)
     {
       u8 *msg = next_node->validate_frame (vm, rt, f);
       if (msg)
-	{
-	  clib_warning ("%v", msg);
-	  ASSERT (0);
-	}
+  {
+    clib_warning ("%v", msg);
+    ASSERT (0);
+  }
       vec_free (msg);
     }
 }
 
 void
 vlib_put_next_frame (vlib_main_t * vm,
-		     vlib_node_runtime_t * r,
-		     u32 next_index, u32 n_vectors_left)
+         vlib_node_runtime_t * r,
+         u32 next_index, u32 n_vectors_left)
 {
   vlib_node_main_t *nm = &vm->node_main;
   vlib_next_frame_t *nf;
@@ -494,57 +496,57 @@ vlib_put_next_frame (vlib_main_t * vm,
       r->cached_next_index = next_index;
 
       if (!(f->flags & VLIB_FRAME_PENDING))
-	{
-	  __attribute__ ((unused)) vlib_node_t *node;
-	  vlib_node_t *next_node;
-	  vlib_node_runtime_t *next_runtime;
+  {
+    __attribute__ ((unused)) vlib_node_t *node;
+    vlib_node_t *next_node;
+    vlib_node_runtime_t *next_runtime;
 
-	  node = vlib_get_node (vm, r->node_index);
-	  next_node = vlib_get_next_node (vm, r->node_index, next_index);
-	  next_runtime = vlib_node_get_runtime (vm, next_node->index);
+    node = vlib_get_node (vm, r->node_index);
+    next_node = vlib_get_next_node (vm, r->node_index, next_index);
+    next_runtime = vlib_node_get_runtime (vm, next_node->index);
 
-	  vec_add2 (nm->pending_frames, p, 1);
+    vec_add2 (nm->pending_frames, p, 1);
 
-	  p->frame_index = nf->frame_index;
-	  p->node_runtime_index = nf->node_runtime_index;
-	  p->next_frame_index = nf - nm->next_frames;
-	  nf->flags |= VLIB_FRAME_PENDING;
-	  f->flags |= VLIB_FRAME_PENDING;
+    p->frame_index = nf->frame_index;
+    p->node_runtime_index = nf->node_runtime_index;
+    p->next_frame_index = nf - nm->next_frames;
+    nf->flags |= VLIB_FRAME_PENDING;
+    f->flags |= VLIB_FRAME_PENDING;
 
-	  /*
-	   * If we're going to dispatch this frame on another thread,
-	   * force allocation of a new frame. Otherwise, we create
-	   * a dangling frame reference. Each thread has its own copy of
-	   * the next_frames vector.
-	   */
-	  if (0 && r->cpu_index != next_runtime->cpu_index)
-	    {
-	      nf->frame_index = ~0;
-	      nf->flags &= ~(VLIB_FRAME_PENDING | VLIB_FRAME_IS_ALLOCATED);
-	    }
-	}
+    /*
+     * If we're going to dispatch this frame on another thread,
+     * force allocation of a new frame. Otherwise, we create
+     * a dangling frame reference. Each thread has its own copy of
+     * the next_frames vector.
+     */
+    if (0 && r->cpu_index != next_runtime->cpu_index)
+      {
+        nf->frame_index = ~0;
+        nf->flags &= ~(VLIB_FRAME_PENDING | VLIB_FRAME_IS_ALLOCATED);
+      }
+  }
 
       /* Copy trace flag from next_frame and from runtime. */
       nf->flags |=
-	(nf->flags & VLIB_NODE_FLAG_TRACE) | (r->
-					      flags & VLIB_NODE_FLAG_TRACE);
+  (nf->flags & VLIB_NODE_FLAG_TRACE) | (r->
+                flags & VLIB_NODE_FLAG_TRACE);
 
       v0 = nf->vectors_since_last_overflow;
       v1 = v0 + n_vectors_in_frame;
       nf->vectors_since_last_overflow = v1;
       if (PREDICT_FALSE (v1 < v0))
-	{
-	  vlib_node_t *node = vlib_get_node (vm, r->node_index);
-	  vec_elt (node->n_vectors_by_next_node, next_index) += v0;
-	}
+  {
+    vlib_node_t *node = vlib_get_node (vm, r->node_index);
+    vec_elt (node->n_vectors_by_next_node, next_index) += v0;
+  }
     }
 }
 
 /* Sync up runtime (32 bit counters) and main node stats (64 bit counters). */
 never_inline void
 vlib_node_runtime_sync_stats (vlib_main_t * vm,
-			      vlib_node_runtime_t * r,
-			      uword n_calls, uword n_vectors, uword n_clocks)
+            vlib_node_runtime_t * r,
+            uword n_calls, uword n_vectors, uword n_clocks)
 {
   vlib_node_t *n = vlib_get_node (vm, r->node_index);
 
@@ -561,8 +563,8 @@ vlib_node_runtime_sync_stats (vlib_main_t * vm,
 
 always_inline void __attribute__ ((unused))
 vlib_process_sync_stats (vlib_main_t * vm,
-			 vlib_process_t * p,
-			 uword n_calls, uword n_vectors, uword n_clocks)
+       vlib_process_t * p,
+       uword n_calls, uword n_vectors, uword n_clocks)
 {
   vlib_node_runtime_t *rt = &p->node_runtime;
   vlib_node_t *n = vlib_get_node (vm, rt->node_index);
@@ -580,7 +582,7 @@ vlib_node_sync_stats (vlib_main_t * vm, vlib_node_t * n)
     {
       /* Nothing to do for PROCESS nodes except in main thread */
       if (vm != &vlib_global_main)
-	return;
+  return;
 
       vlib_process_t *p = vlib_get_process_from_node (vm, n);
       n->stats_total.suspends += p->n_suspends;
@@ -590,7 +592,7 @@ vlib_node_sync_stats (vlib_main_t * vm, vlib_node_t * n)
   else
     rt =
       vec_elt_at_index (vm->node_main.nodes_by_type[n->type],
-			n->runtime_index);
+      n->runtime_index);
 
   vlib_node_runtime_sync_stats (vm, rt, 0, 0, 0);
 
@@ -600,19 +602,19 @@ vlib_node_sync_stats (vlib_main_t * vm, vlib_node_t * n)
     uword i;
     for (i = 0; i < rt->n_next_nodes; i++)
       {
-	nf = vlib_node_runtime_get_next_frame (vm, rt, i);
-	vec_elt (n->n_vectors_by_next_node, i) +=
-	  nf->vectors_since_last_overflow;
-	nf->vectors_since_last_overflow = 0;
+  nf = vlib_node_runtime_get_next_frame (vm, rt, i);
+  vec_elt (n->n_vectors_by_next_node, i) +=
+    nf->vectors_since_last_overflow;
+  nf->vectors_since_last_overflow = 0;
       }
   }
 }
 
 always_inline u32
 vlib_node_runtime_update_stats (vlib_main_t * vm,
-				vlib_node_runtime_t * node,
-				uword n_calls,
-				uword n_vectors, uword n_clocks)
+        vlib_node_runtime_t * node,
+        uword n_calls,
+        uword n_vectors, uword n_clocks)
 {
   u32 ca0, ca1, v0, v1, cl0, cl1, r;
 
@@ -646,16 +648,16 @@ vlib_node_runtime_update_stats (vlib_main_t * vm,
 
 always_inline void
 vlib_process_update_stats (vlib_main_t * vm,
-			   vlib_process_t * p,
-			   uword n_calls, uword n_vectors, uword n_clocks)
+         vlib_process_t * p,
+         uword n_calls, uword n_vectors, uword n_clocks)
 {
   vlib_node_runtime_update_stats (vm, &p->node_runtime,
-				  n_calls, n_vectors, n_clocks);
+          n_calls, n_vectors, n_clocks);
 }
 
 static clib_error_t *
 vlib_cli_elog_clear (vlib_main_t * vm,
-		     unformat_input_t * input, vlib_cli_command_t * cmd)
+         unformat_input_t * input, vlib_cli_command_t * cmd)
 {
   elog_reset_buffer (&vm->elog_main);
   return 0;
@@ -672,7 +674,7 @@ VLIB_CLI_COMMAND (elog_clear_cli, static) = {
 #ifdef CLIB_UNIX
 static clib_error_t *
 elog_save_buffer (vlib_main_t * vm,
-		  unformat_input_t * input, vlib_cli_command_t * cmd)
+      unformat_input_t * input, vlib_cli_command_t * cmd)
 {
   elog_main_t *em = &vm->elog_main;
   char *file, *chroot_file;
@@ -681,7 +683,7 @@ elog_save_buffer (vlib_main_t * vm,
   if (!unformat (input, "%s", &file))
     {
       vlib_cli_output (vm, "expected file name, got `%U'",
-		       format_unformat_error, input);
+           format_unformat_error, input);
       return 0;
     }
 
@@ -697,8 +699,8 @@ elog_save_buffer (vlib_main_t * vm,
   vec_free (file);
 
   vlib_cli_output (vm, "Saving %wd of %wd events to %s",
-		   elog_n_events_in_buffer (em),
-		   elog_buffer_capacity (em), chroot_file);
+       elog_n_events_in_buffer (em),
+       elog_buffer_capacity (em), chroot_file);
 
   vlib_worker_thread_barrier_sync (vm);
   error = elog_write_file (em, chroot_file);
@@ -717,7 +719,7 @@ VLIB_CLI_COMMAND (elog_save_cli, static) = {
 
 static clib_error_t *
 elog_stop (vlib_main_t * vm,
-	   unformat_input_t * input, vlib_cli_command_t * cmd)
+     unformat_input_t * input, vlib_cli_command_t * cmd)
 {
   elog_main_t *em = &vm->elog_main;
 
@@ -737,7 +739,7 @@ VLIB_CLI_COMMAND (elog_stop_cli, static) = {
 
 static clib_error_t *
 elog_restart (vlib_main_t * vm,
-	      unformat_input_t * input, vlib_cli_command_t * cmd)
+        unformat_input_t * input, vlib_cli_command_t * cmd)
 {
   elog_main_t *em = &vm->elog_main;
 
@@ -757,7 +759,7 @@ VLIB_CLI_COMMAND (elog_restart_cli, static) = {
 
 static clib_error_t *
 elog_resize (vlib_main_t * vm,
-	     unformat_input_t * input, vlib_cli_command_t * cmd)
+       unformat_input_t * input, vlib_cli_command_t * cmd)
 {
   elog_main_t *em = &vm->elog_main;
   u32 tmp;
@@ -800,13 +802,13 @@ elog_show_buffer_internal (vlib_main_t * vm, u32 n_events_to_show)
 
   es = elog_peek_events (em);
   vlib_cli_output (vm, "%d of %d events in buffer, logger %s", vec_len (es),
-		   em->event_ring_size,
-		   em->n_total_events < em->n_total_events_disable_limit ?
-		   "running" : "stopped");
+       em->event_ring_size,
+       em->n_total_events < em->n_total_events_disable_limit ?
+       "running" : "stopped");
   vec_foreach (e, es)
   {
     vlib_cli_output (vm, "%18.9f: %U",
-		     e->time + dt, format_elog_event, em, e);
+         e->time + dt, format_elog_event, em, e);
     n_events_to_show--;
     if (n_events_to_show == 0)
       break;
@@ -817,7 +819,7 @@ elog_show_buffer_internal (vlib_main_t * vm, u32 n_events_to_show)
 
 static clib_error_t *
 elog_show_buffer (vlib_main_t * vm,
-		  unformat_input_t * input, vlib_cli_command_t * cmd)
+      unformat_input_t * input, vlib_cli_command_t * cmd)
 {
   u32 n_events_to_show;
   clib_error_t *error = 0;
@@ -826,11 +828,11 @@ elog_show_buffer (vlib_main_t * vm,
   while (unformat_check_input (input) != UNFORMAT_END_OF_INPUT)
     {
       if (unformat (input, "%d", &n_events_to_show))
-	;
+  ;
       else if (unformat (input, "all"))
-	n_events_to_show = ~0;
+  n_events_to_show = ~0;
       else
-	return unformat_parse_error (input);
+  return unformat_parse_error (input);
     }
   elog_show_buffer_internal (vm, n_events_to_show);
   return error;
@@ -852,23 +854,23 @@ vlib_gdb_show_event_log (void)
 
 static inline void
 vlib_elog_main_loop_event (vlib_main_t * vm,
-			   u32 node_index,
-			   u64 time, u32 n_vectors, u32 is_return)
+         u32 node_index,
+         u64 time, u32 n_vectors, u32 is_return)
 {
   vlib_main_t *evm = &vlib_global_main;
   elog_main_t *em = &evm->elog_main;
 
   if (VLIB_ELOG_MAIN_LOOP && n_vectors)
     elog_track (em,
-		/* event type */
-		vec_elt_at_index (is_return
-				  ? evm->node_return_elog_event_types
-				  : evm->node_call_elog_event_types,
-				  node_index),
-		/* track */
-		(vm->cpu_index ? &vlib_worker_threads[vm->cpu_index].
-		 elog_track : &em->default_track),
-		/* data to log */ n_vectors);
+    /* event type */
+    vec_elt_at_index (is_return
+          ? evm->node_return_elog_event_types
+          : evm->node_call_elog_event_types,
+          node_index),
+    /* track */
+    (vm->cpu_index ? &vlib_worker_threads[vm->cpu_index].
+     elog_track : &em->default_track),
+    /* data to log */ n_vectors);
 }
 
 void
@@ -884,45 +886,45 @@ vlib_dump_context_trace (vlib_main_t * vm, u32 bi)
       n = b->pre_data[0];
 
       fformat (stderr, "Context trace for bi %d b 0x%llx, visited %d\n",
-	       bi, b, n);
+         bi, b, n);
 
       if (n == 0 || n > 20)
-	{
-	  fformat (stderr, "n is unreasonable\n");
-	  return;
-	}
+  {
+    fformat (stderr, "n is unreasonable\n");
+    return;
+  }
 
 
       for (i = 0; i < n; i++)
-	{
-	  u32 node_index;
+  {
+    u32 node_index;
 
-	  node_index = b->pre_data[i + 1];
+    node_index = b->pre_data[i + 1];
 
-	  if (node_index > vec_len (vnm->nodes))
-	    {
-	      fformat (stderr, "Skip bogus node index %d\n", node_index);
-	      continue;
-	    }
+    if (node_index > vec_len (vnm->nodes))
+      {
+        fformat (stderr, "Skip bogus node index %d\n", node_index);
+        continue;
+      }
 
-	  fformat (stderr, "%v (%d)\n", vnm->nodes[node_index]->name,
-		   node_index);
-	}
+    fformat (stderr, "%v (%d)\n", vnm->nodes[node_index]->name,
+       node_index);
+  }
     }
   else
     {
       fformat (stderr,
-	       "in vlib/buffers.h, #define VLIB_BUFFER_TRACE_TRAJECTORY 1\n");
+         "in vlib/buffers.h, #define VLIB_BUFFER_TRACE_TRAJECTORY 1\n");
     }
 }
 
 
 /* static_always_inline */ u64
 dispatch_node (vlib_main_t * vm,
-	       vlib_node_runtime_t * node,
-	       vlib_node_type_t type,
-	       vlib_node_state_t dispatch_state,
-	       vlib_frame_t * frame, u64 last_time_stamp)
+         vlib_node_runtime_t * node,
+         vlib_node_type_t type,
+         vlib_node_state_t dispatch_state,
+         vlib_frame_t * frame, u64 last_time_stamp)
 {
   uword n, v;
   u64 t;
@@ -948,10 +950,10 @@ dispatch_node (vlib_main_t * vm,
       u32 c = node->input_main_loops_per_call;
       /* Only call node when count reaches zero. */
       if (c)
-	{
-	  node->input_main_loops_per_call = c - 1;
-	  return last_time_stamp;
-	}
+  {
+    node->input_main_loops_per_call = c - 1;
+    return last_time_stamp;
+  }
     }
 
   /* Speculatively prefetch next frames. */
@@ -970,9 +972,9 @@ dispatch_node (vlib_main_t * vm,
       stat_vm = /* vlib_mains ? vlib_mains[0] : */ vm;
 
       vlib_elog_main_loop_event (vm, node->node_index,
-				 last_time_stamp,
-				 frame ? frame->n_vectors : 0,
-				 /* is_after */ 0);
+         last_time_stamp,
+         frame ? frame->n_vectors : 0,
+         /* is_after */ 0);
 
       /*
        * Turn this on if you run into
@@ -980,114 +982,114 @@ dispatch_node (vlib_main_t * vm,
        * which nodes they've visited... See ixge.c...
        */
       if (VLIB_BUFFER_TRACE_TRAJECTORY && frame)
-	{
-	  int i;
-	  int log_index;
-	  u32 *from;
-	  from = vlib_frame_vector_args (frame);
-	  for (i = 0; i < frame->n_vectors; i++)
-	    {
-	      vlib_buffer_t *b = vlib_get_buffer (vm, from[i]);
-	      ASSERT (b->pre_data[0] < 32);
-	      log_index = b->pre_data[0]++ + 1;
-	      b->pre_data[log_index] = node->node_index;
-	    }
-	  n = node->function (vm, node, frame);
-	}
+  {
+    int i;
+    int log_index;
+    u32 *from;
+    from = vlib_frame_vector_args (frame);
+    for (i = 0; i < frame->n_vectors; i++)
+      {
+        vlib_buffer_t *b = vlib_get_buffer (vm, from[i]);
+        ASSERT (b->pre_data[0] < 32);
+        log_index = b->pre_data[0]++ + 1;
+        b->pre_data[log_index] = node->node_index;
+      }
+    n = node->function (vm, node, frame);
+  }
       else
-	n = node->function (vm, node, frame);
+  n = node->function (vm, node, frame);
 
       t = clib_cpu_time_now ();
 
-      vlib_elog_main_loop_event (vm, node->node_index, t, n,	/* is_after */
-				 1);
+      vlib_elog_main_loop_event (vm, node->node_index, t, n,  /* is_after */
+         1);
 
       vm->main_loop_vectors_processed += n;
       vm->main_loop_nodes_processed += n > 0;
 
       v = vlib_node_runtime_update_stats (stat_vm, node,
-					  /* n_calls */ 1,
-					  /* n_vectors */ n,
-					  /* n_clocks */ t - last_time_stamp);
+            /* n_calls */ 1,
+            /* n_vectors */ n,
+            /* n_clocks */ t - last_time_stamp);
 
       /* When in interrupt mode and vector rate crosses threshold switch to
          polling mode. */
       if ((dispatch_state == VLIB_NODE_STATE_INTERRUPT)
-	  || (dispatch_state == VLIB_NODE_STATE_POLLING
-	      && (node->flags
-		  & VLIB_NODE_FLAG_SWITCH_FROM_INTERRUPT_TO_POLLING_MODE)))
-	{
+    || (dispatch_state == VLIB_NODE_STATE_POLLING
+        && (node->flags
+      & VLIB_NODE_FLAG_SWITCH_FROM_INTERRUPT_TO_POLLING_MODE)))
+  {
 #ifdef DISPATCH_NODE_ELOG_REQUIRED
-	  ELOG_TYPE_DECLARE (e) =
-	  {
-	    .function = (char *) __FUNCTION__,.format =
-	      "%s vector length %d, switching to %s",.format_args =
-	      "T4i4t4",.n_enum_strings = 2,.enum_strings =
-	    {
-	  "interrupt", "polling",},};
-	  struct
-	  {
-	    u32 node_name, vector_length, is_polling;
-	  } *ed;
-	  vlib_worker_thread_t *w = vlib_worker_threads + vm->cpu_index;
+    ELOG_TYPE_DECLARE (e) =
+    {
+      .function = (char *) __FUNCTION__,.format =
+        "%s vector length %d, switching to %s",.format_args =
+        "T4i4t4",.n_enum_strings = 2,.enum_strings =
+      {
+    "interrupt", "polling",},};
+    struct
+    {
+      u32 node_name, vector_length, is_polling;
+    } *ed;
+    vlib_worker_thread_t *w = vlib_worker_threads + vm->cpu_index;
 #endif
 
-	  if ((dispatch_state == VLIB_NODE_STATE_INTERRUPT
-	       && v >= nm->polling_threshold_vector_length) &&
-	      !(node->flags &
-		VLIB_NODE_FLAG_SWITCH_FROM_INTERRUPT_TO_POLLING_MODE))
-	    {
-	      vlib_node_t *n = vlib_get_node (vm, node->node_index);
-	      n->state = VLIB_NODE_STATE_POLLING;
-	      node->state = VLIB_NODE_STATE_POLLING;
-	      node->flags &=
-		~VLIB_NODE_FLAG_SWITCH_FROM_POLLING_TO_INTERRUPT_MODE;
-	      node->flags |=
-		VLIB_NODE_FLAG_SWITCH_FROM_INTERRUPT_TO_POLLING_MODE;
-	      nm->input_node_counts_by_state[VLIB_NODE_STATE_INTERRUPT] -= 1;
-	      nm->input_node_counts_by_state[VLIB_NODE_STATE_POLLING] += 1;
+    if ((dispatch_state == VLIB_NODE_STATE_INTERRUPT
+         && v >= nm->polling_threshold_vector_length) &&
+        !(node->flags &
+    VLIB_NODE_FLAG_SWITCH_FROM_INTERRUPT_TO_POLLING_MODE))
+      {
+        vlib_node_t *n = vlib_get_node (vm, node->node_index);
+        n->state = VLIB_NODE_STATE_POLLING;
+        node->state = VLIB_NODE_STATE_POLLING;
+        node->flags &=
+    ~VLIB_NODE_FLAG_SWITCH_FROM_POLLING_TO_INTERRUPT_MODE;
+        node->flags |=
+    VLIB_NODE_FLAG_SWITCH_FROM_INTERRUPT_TO_POLLING_MODE;
+        nm->input_node_counts_by_state[VLIB_NODE_STATE_INTERRUPT] -= 1;
+        nm->input_node_counts_by_state[VLIB_NODE_STATE_POLLING] += 1;
 
 #ifdef DISPATCH_NODE_ELOG_REQUIRED
-	      ed = ELOG_TRACK_DATA (&vlib_global_main.elog_main, e,
-				    w->elog_track);
-	      ed->node_name = n->name_elog_string;
-	      ed->vector_length = v;
-	      ed->is_polling = 1;
+        ed = ELOG_TRACK_DATA (&vlib_global_main.elog_main, e,
+            w->elog_track);
+        ed->node_name = n->name_elog_string;
+        ed->vector_length = v;
+        ed->is_polling = 1;
 #endif
-	    }
-	  else if (dispatch_state == VLIB_NODE_STATE_POLLING
-		   && v <= nm->interrupt_threshold_vector_length)
-	    {
-	      vlib_node_t *n = vlib_get_node (vm, node->node_index);
-	      if (node->flags &
-		  VLIB_NODE_FLAG_SWITCH_FROM_POLLING_TO_INTERRUPT_MODE)
-		{
-		  /* Switch to interrupt mode after dispatch in polling one more time.
-		     This allows driver to re-enable interrupts. */
-		  n->state = VLIB_NODE_STATE_INTERRUPT;
-		  node->state = VLIB_NODE_STATE_INTERRUPT;
-		  node->flags &=
-		    ~VLIB_NODE_FLAG_SWITCH_FROM_INTERRUPT_TO_POLLING_MODE;
-		  nm->input_node_counts_by_state[VLIB_NODE_STATE_POLLING] -=
-		    1;
-		  nm->input_node_counts_by_state[VLIB_NODE_STATE_INTERRUPT] +=
-		    1;
+      }
+    else if (dispatch_state == VLIB_NODE_STATE_POLLING
+       && v <= nm->interrupt_threshold_vector_length)
+      {
+        vlib_node_t *n = vlib_get_node (vm, node->node_index);
+        if (node->flags &
+      VLIB_NODE_FLAG_SWITCH_FROM_POLLING_TO_INTERRUPT_MODE)
+    {
+      /* Switch to interrupt mode after dispatch in polling one more time.
+         This allows driver to re-enable interrupts. */
+      n->state = VLIB_NODE_STATE_INTERRUPT;
+      node->state = VLIB_NODE_STATE_INTERRUPT;
+      node->flags &=
+        ~VLIB_NODE_FLAG_SWITCH_FROM_INTERRUPT_TO_POLLING_MODE;
+      nm->input_node_counts_by_state[VLIB_NODE_STATE_POLLING] -=
+        1;
+      nm->input_node_counts_by_state[VLIB_NODE_STATE_INTERRUPT] +=
+        1;
 
-		}
-	      else
-		{
-		  node->flags |=
-		    VLIB_NODE_FLAG_SWITCH_FROM_POLLING_TO_INTERRUPT_MODE;
+    }
+        else
+    {
+      node->flags |=
+        VLIB_NODE_FLAG_SWITCH_FROM_POLLING_TO_INTERRUPT_MODE;
 #ifdef DISPATCH_NODE_ELOG_REQUIRED
-		  ed = ELOG_TRACK_DATA (&vlib_global_main.elog_main, e,
-					w->elog_track);
-		  ed->node_name = n->name_elog_string;
-		  ed->vector_length = v;
-		  ed->is_polling = 0;
+      ed = ELOG_TRACK_DATA (&vlib_global_main.elog_main, e,
+          w->elog_track);
+      ed->node_name = n->name_elog_string;
+      ed->vector_length = v;
+      ed->is_polling = 0;
 #endif
-		}
-	    }
-	}
+    }
+      }
+  }
     }
 
   return t;
@@ -1095,7 +1097,7 @@ dispatch_node (vlib_main_t * vm,
 
 /* static */ u64
 dispatch_pending_node (vlib_main_t * vm,
-		       vlib_pending_frame_t * p, u64 last_time_stamp)
+           vlib_pending_frame_t * p, u64 last_time_stamp)
 {
   vlib_node_main_t *nm = &vm->node_main;
   vlib_frame_t *f;
@@ -1104,7 +1106,7 @@ dispatch_pending_node (vlib_main_t * vm,
   u32 restore_frame_index;
 
   n = vec_elt_at_index (nm->nodes_by_type[VLIB_NODE_TYPE_INTERNAL],
-			p->node_runtime_index);
+      p->node_runtime_index);
 
   f = vlib_get_frame (vm, p->frame_index);
   if (p->next_frame_index == VLIB_PENDING_FRAME_NO_NEXT_FRAME)
@@ -1127,7 +1129,7 @@ dispatch_pending_node (vlib_main_t * vm,
       nf->frame_index = ~0;
       nf->flags &= ~VLIB_FRAME_IS_ALLOCATED;
       if (!(n->flags & VLIB_NODE_FLAG_FRAME_NO_FREE_AFTER_DISPATCH))
-	restore_frame_index = p->frame_index;
+  restore_frame_index = p->frame_index;
     }
 
   /* Frame must be pending. */
@@ -1142,9 +1144,9 @@ dispatch_pending_node (vlib_main_t * vm,
   nf->flags &= ~VLIB_FRAME_TRACE;
 
   last_time_stamp = dispatch_node (vm, n,
-				   VLIB_NODE_TYPE_INTERNAL,
-				   VLIB_NODE_STATE_POLLING,
-				   f, last_time_stamp);
+           VLIB_NODE_TYPE_INTERNAL,
+           VLIB_NODE_STATE_POLLING,
+           f, last_time_stamp);
 
   f->flags &= ~VLIB_FRAME_PENDING;
 
@@ -1167,26 +1169,26 @@ dispatch_pending_node (vlib_main_t * vm,
       nf->flags |= VLIB_FRAME_IS_ALLOCATED;
 
       if (~0 == nf->frame_index)
-	{
-	  /* no new frame has been assigned to this node, use the saved one */
-	  nf->frame_index = restore_frame_index;
-	  f->n_vectors = 0;
-	}
+  {
+    /* no new frame has been assigned to this node, use the saved one */
+    nf->frame_index = restore_frame_index;
+    f->n_vectors = 0;
+  }
       else
-	{
-	  /* The node has gained a frame, implying packets from the current frame
-	     were re-queued to this same node. we don't need the saved one
-	     anymore */
-	  vlib_frame_free (vm, n, f);
-	}
+  {
+    /* The node has gained a frame, implying packets from the current frame
+       were re-queued to this same node. we don't need the saved one
+       anymore */
+    vlib_frame_free (vm, n, f);
+  }
     }
   else
     {
       if (f->flags & VLIB_FRAME_FREE_AFTER_DISPATCH)
-	{
-	  ASSERT (!(n->flags & VLIB_NODE_FLAG_FRAME_NO_FREE_AFTER_DISPATCH));
-	  vlib_frame_free (vm, n, f);
-	}
+  {
+    ASSERT (!(n->flags & VLIB_NODE_FLAG_FRAME_NO_FREE_AFTER_DISPATCH));
+    vlib_frame_free (vm, n, f);
+  }
     }
 
   return last_time_stamp;
@@ -1246,7 +1248,7 @@ vlib_process_startup (vlib_main_t * vm, vlib_process_t * p, vlib_frame_t * f)
   r = clib_setjmp (&p->return_longjmp, VLIB_PROCESS_RETURN_LONGJMP_RETURN);
   if (r == VLIB_PROCESS_RETURN_LONGJMP_RETURN)
     r = clib_calljmp (vlib_process_bootstrap, pointer_to_uword (&a),
-		      (void *) p->stack + (1 << p->log2_n_stack_bytes));
+          (void *) p->stack + (1 << p->log2_n_stack_bytes));
 
   return r;
 }
@@ -1256,8 +1258,8 @@ vlib_process_resume (vlib_process_t * p)
 {
   uword r;
   p->flags &= ~(VLIB_PROCESS_IS_SUSPENDED_WAITING_FOR_CLOCK
-		| VLIB_PROCESS_IS_SUSPENDED_WAITING_FOR_EVENT
-		| VLIB_PROCESS_RESUME_PENDING);
+    | VLIB_PROCESS_IS_SUSPENDED_WAITING_FOR_EVENT
+    | VLIB_PROCESS_RESUME_PENDING);
   r = clib_setjmp (&p->return_longjmp, VLIB_PROCESS_RETURN_LONGJMP_RETURN);
   if (r == VLIB_PROCESS_RETURN_LONGJMP_RETURN)
     clib_longjmp (&p->resume_longjmp, VLIB_PROCESS_RESUME_LONGJMP_RESUME);
@@ -1266,7 +1268,7 @@ vlib_process_resume (vlib_process_t * p)
 
 static u64
 dispatch_process (vlib_main_t * vm,
-		  vlib_process_t * p, vlib_frame_t * f, u64 last_time_stamp)
+      vlib_process_t * p, vlib_frame_t * f, u64 last_time_stamp)
 {
   vlib_node_main_t *nm = &vm->node_main;
   vlib_node_runtime_t *node_runtime = &p->node_runtime;
@@ -1276,14 +1278,14 @@ dispatch_process (vlib_main_t * vm,
 
   if (node->state != VLIB_NODE_STATE_POLLING
       || (p->flags & (VLIB_PROCESS_IS_SUSPENDED_WAITING_FOR_CLOCK
-		      | VLIB_PROCESS_IS_SUSPENDED_WAITING_FOR_EVENT)))
+          | VLIB_PROCESS_IS_SUSPENDED_WAITING_FOR_EVENT)))
     return last_time_stamp;
 
   p->flags |= VLIB_PROCESS_IS_RUNNING;
 
   t = last_time_stamp;
   vlib_elog_main_loop_event (vm, node_runtime->node_index, t,
-			     f ? f->n_vectors : 0, /* is_after */ 0);
+           f ? f->n_vectors : 0, /* is_after */ 0);
 
   /* Save away current process for suspend. */
   nm->current_process_index = node->runtime_index;
@@ -1308,9 +1310,9 @@ dispatch_process (vlib_main_t * vm,
       p->suspended_process_frame_index = pf - nm->suspended_process_frames;
 
       if (p->flags & VLIB_PROCESS_IS_SUSPENDED_WAITING_FOR_CLOCK)
-	timing_wheel_insert (&nm->timing_wheel, p->resume_cpu_time,
-			     vlib_timing_wheel_data_set_suspended_process
-			     (node->runtime_index));
+  timing_wheel_insert (&nm->timing_wheel, p->resume_cpu_time,
+           vlib_timing_wheel_data_set_suspended_process
+           (node->runtime_index));
     }
   else
     p->flags &= ~VLIB_PROCESS_IS_RUNNING;
@@ -1318,12 +1320,12 @@ dispatch_process (vlib_main_t * vm,
   t = clib_cpu_time_now ();
 
   vlib_elog_main_loop_event (vm, node_runtime->node_index, t, is_suspend,
-			     /* is_after */ 1);
+           /* is_after */ 1);
 
   vlib_process_update_stats (vm, p,
-			     /* n_calls */ !is_suspend,
-			     /* n_vectors */ n_vectors,
-			     /* n_clocks */ t - last_time_stamp);
+           /* n_calls */ !is_suspend,
+           /* n_vectors */ n_vectors,
+           /* n_clocks */ t - last_time_stamp);
 
   return t;
 }
@@ -1338,7 +1340,7 @@ vlib_start_process (vlib_main_t * vm, uword process_index)
 
 static u64
 dispatch_suspended_process (vlib_main_t * vm,
-			    uword process_index, u64 last_time_stamp)
+          uword process_index, u64 last_time_stamp)
 {
   vlib_node_main_t *nm = &vm->node_main;
   vlib_node_runtime_t *node_runtime;
@@ -1355,18 +1357,18 @@ dispatch_suspended_process (vlib_main_t * vm,
     return last_time_stamp;
 
   ASSERT (p->flags & (VLIB_PROCESS_IS_SUSPENDED_WAITING_FOR_CLOCK
-		      | VLIB_PROCESS_IS_SUSPENDED_WAITING_FOR_EVENT));
+          | VLIB_PROCESS_IS_SUSPENDED_WAITING_FOR_EVENT));
 
   pf =
     pool_elt_at_index (nm->suspended_process_frames,
-		       p->suspended_process_frame_index);
+           p->suspended_process_frame_index);
 
   node_runtime = &p->node_runtime;
   node = vlib_get_node (vm, node_runtime->node_index);
   f = pf->frame_index != ~0 ? vlib_get_frame (vm, pf->frame_index) : 0;
 
   vlib_elog_main_loop_event (vm, node_runtime->node_index, t,
-			     f ? f->n_vectors : 0, /* is_after */ 0);
+           f ? f->n_vectors : 0, /* is_after */ 0);
 
   /* Save away current process for suspend. */
   nm->current_process_index = node->runtime_index;
@@ -1383,9 +1385,9 @@ dispatch_suspended_process (vlib_main_t * vm,
       n_vectors = 0;
       p->n_suspends += 1;
       if (p->flags & VLIB_PROCESS_IS_SUSPENDED_WAITING_FOR_CLOCK)
-	timing_wheel_insert (&nm->timing_wheel, p->resume_cpu_time,
-			     vlib_timing_wheel_data_set_suspended_process
-			     (node->runtime_index));
+  timing_wheel_insert (&nm->timing_wheel, p->resume_cpu_time,
+           vlib_timing_wheel_data_set_suspended_process
+           (node->runtime_index));
     }
   else
     {
@@ -1396,12 +1398,12 @@ dispatch_suspended_process (vlib_main_t * vm,
 
   t = clib_cpu_time_now ();
   vlib_elog_main_loop_event (vm, node_runtime->node_index, t, !is_suspend,
-			     /* is_after */ 1);
+           /* is_after */ 1);
 
   vlib_process_update_stats (vm, p,
-			     /* n_calls */ !is_suspend,
-			     /* n_vectors */ n_vectors,
-			     /* n_clocks */ t - last_time_stamp);
+           /* n_calls */ !is_suspend,
+           /* n_vectors */ n_vectors,
+           /* n_clocks */ t - last_time_stamp);
 
   return t;
 }
@@ -1427,7 +1429,7 @@ vlib_main_or_worker_loop (vlib_main_t * vm, int is_main)
     {
       cpu_time_now = vm->clib_time.last_cpu_time;
       vm->cpu_time_main_loop_start = cpu_time_now;
-    }
+     }
   else
     cpu_time_now = clib_cpu_time_now ();
 
@@ -1438,7 +1440,7 @@ vlib_main_or_worker_loop (vlib_main_t * vm, int is_main)
       nm->timing_wheel.min_sched_time = 10e-6;
       nm->timing_wheel.max_sched_time = 10e-3;
       timing_wheel_init (&nm->timing_wheel,
-			 cpu_time_now, vm->clib_time.clocks_per_second);
+       cpu_time_now, vm->clib_time.clocks_per_second);
       vec_alloc (nm->data_from_advancing_timing_wheel, 32);
     }
 
@@ -1452,9 +1454,9 @@ vlib_main_or_worker_loop (vlib_main_t * vm, int is_main)
   if (is_main)
     {
       if (!nm->polling_threshold_vector_length)
-	nm->polling_threshold_vector_length = 10;
+  nm->polling_threshold_vector_length = 10;
       if (!nm->interrupt_threshold_vector_length)
-	nm->interrupt_threshold_vector_length = 5;
+  nm->interrupt_threshold_vector_length = 5;
 
       nm->current_process_index = ~0;
     }
@@ -1464,8 +1466,8 @@ vlib_main_or_worker_loop (vlib_main_t * vm, int is_main)
     {
       uword i;
       for (i = 0; i < vec_len (nm->processes); i++)
-	cpu_time_now = dispatch_process (vm, nm->processes[i], /* frame */ 0,
-					 cpu_time_now);
+  cpu_time_now = dispatch_process (vm, nm->processes[i], /* frame */ 0,
+           cpu_time_now);
     }
 
   while (1)
@@ -1473,128 +1475,139 @@ vlib_main_or_worker_loop (vlib_main_t * vm, int is_main)
       vlib_node_runtime_t *n;
 
       if (!is_main)
-	{
-	  vlib_worker_thread_barrier_check ();
-	  vec_foreach (fqm, tm->frame_queue_mains)
-	    vlib_frame_queue_dequeue (vm, fqm);
-	}
+  {
+    vlib_worker_thread_barrier_check ();
+    vec_foreach (fqm, tm->frame_queue_mains)
+      vlib_frame_queue_dequeue (vm, fqm);
+  }
 
       /* Process pre-input nodes. */
       if (is_main)
-	vec_foreach (n, nm->nodes_by_type[VLIB_NODE_TYPE_PRE_INPUT])
-	  cpu_time_now = dispatch_node (vm, n,
-					VLIB_NODE_TYPE_PRE_INPUT,
-					VLIB_NODE_STATE_POLLING,
-					/* frame */ 0,
-					cpu_time_now);
+  vec_foreach (n, nm->nodes_by_type[VLIB_NODE_TYPE_PRE_INPUT])
+    cpu_time_now = dispatch_node (vm, n,
+          VLIB_NODE_TYPE_PRE_INPUT,
+          VLIB_NODE_STATE_POLLING,
+          /* frame */ 0,
+          cpu_time_now);
 
       /* Next process input nodes. */
       vec_foreach (n, nm->nodes_by_type[VLIB_NODE_TYPE_INPUT])
-	cpu_time_now = dispatch_node (vm, n,
-				      VLIB_NODE_TYPE_INPUT,
-				      VLIB_NODE_STATE_POLLING,
-				      /* frame */ 0,
-				      cpu_time_now);
+  cpu_time_now = dispatch_node (vm, n,
+              VLIB_NODE_TYPE_INPUT,
+              VLIB_NODE_STATE_POLLING,
+              /* frame */ 0,
+              cpu_time_now);
 
       if (PREDICT_TRUE (is_main && vm->queue_signal_pending == 0))
-	vm->queue_signal_callback (vm);
+  vm->queue_signal_callback (vm);
 
       /* Next handle interrupts. */
       {
-	uword l = _vec_len (nm->pending_interrupt_node_runtime_indices);
-	uword i;
-	if (l > 0)
-	  {
-	    _vec_len (nm->pending_interrupt_node_runtime_indices) = 0;
-	    for (i = 0; i < l; i++)
-	      {
-		n = vec_elt_at_index (nm->nodes_by_type[VLIB_NODE_TYPE_INPUT],
-				      nm->
-				      pending_interrupt_node_runtime_indices
-				      [i]);
-		cpu_time_now =
-		  dispatch_node (vm, n, VLIB_NODE_TYPE_INPUT,
-				 VLIB_NODE_STATE_INTERRUPT,
-				 /* frame */ 0,
-				 cpu_time_now);
-	      }
-	  }
+  uword l = _vec_len (nm->pending_interrupt_node_runtime_indices);
+  uword i;
+  if (l > 0)
+    {
+      _vec_len (nm->pending_interrupt_node_runtime_indices) = 0;
+      for (i = 0; i < l; i++)
+        {
+    n = vec_elt_at_index (nm->nodes_by_type[VLIB_NODE_TYPE_INPUT],
+              nm->
+              pending_interrupt_node_runtime_indices
+              [i]);
+    cpu_time_now =
+      dispatch_node (vm, n, VLIB_NODE_TYPE_INPUT,
+         VLIB_NODE_STATE_INTERRUPT,
+         /* frame */ 0,
+         cpu_time_now);
+        }
+    }
       }
 
       if (is_main)
-	{
-	  /* Check if process nodes have expired from timing wheel. */
-	  nm->data_from_advancing_timing_wheel
-	    = timing_wheel_advance (&nm->timing_wheel, cpu_time_now,
-				    nm->data_from_advancing_timing_wheel,
-				    &nm->cpu_time_next_process_ready);
+  {
+    /* Check if process nodes have expired from timing wheel. */
+    nm->data_from_advancing_timing_wheel
+      = timing_wheel_advance (&nm->timing_wheel, cpu_time_now,
+            nm->data_from_advancing_timing_wheel,
+            &nm->cpu_time_next_process_ready);
 
-	  ASSERT (nm->data_from_advancing_timing_wheel != 0);
-	  if (PREDICT_FALSE
-	      (_vec_len (nm->data_from_advancing_timing_wheel) > 0))
-	    {
-	      uword i;
+    ASSERT (nm->data_from_advancing_timing_wheel != 0);
+    if (PREDICT_FALSE
+        (_vec_len (nm->data_from_advancing_timing_wheel) > 0))
+      {
+        uword i;
 
-	    processes_timing_wheel_data:
-	      for (i = 0; i < _vec_len (nm->data_from_advancing_timing_wheel);
-		   i++)
-		{
-		  u32 d = nm->data_from_advancing_timing_wheel[i];
-		  u32 di = vlib_timing_wheel_data_get_index (d);
+      processes_timing_wheel_data:
+        for (i = 0; i < _vec_len (nm->data_from_advancing_timing_wheel);
+       i++)
+    {
+      u32 d = nm->data_from_advancing_timing_wheel[i];
+      u32 di = vlib_timing_wheel_data_get_index (d);
 
-		  if (vlib_timing_wheel_data_is_timed_event (d))
-		    {
-		      vlib_signal_timed_event_data_t *te =
-			pool_elt_at_index (nm->signal_timed_event_data_pool,
-					   di);
-		      vlib_node_t *n =
-			vlib_get_node (vm, te->process_node_index);
-		      vlib_process_t *p =
-			vec_elt (nm->processes, n->runtime_index);
-		      void *data;
-		      data =
-			vlib_process_signal_event_helper (nm, n, p,
-							  te->event_type_index,
-							  te->n_data_elts,
-							  te->n_data_elt_bytes);
-		      if (te->n_data_bytes < sizeof (te->inline_event_data))
-			clib_memcpy (data, te->inline_event_data,
-				     te->n_data_bytes);
-		      else
-			{
-			  clib_memcpy (data, te->event_data_as_vector,
-				       te->n_data_bytes);
-			  vec_free (te->event_data_as_vector);
-			}
-		      pool_put (nm->signal_timed_event_data_pool, te);
-		    }
-		  else
-		    {
-		      cpu_time_now = clib_cpu_time_now ();
-		      cpu_time_now =
-			dispatch_suspended_process (vm, di, cpu_time_now);
-		    }
-		}
+      if (vlib_timing_wheel_data_is_timed_event (d))
+        {
+          vlib_signal_timed_event_data_t *te =
+      pool_elt_at_index (nm->signal_timed_event_data_pool,
+             di);
+          vlib_node_t *n =
+      vlib_get_node (vm, te->process_node_index);
+          vlib_process_t *p =
+      vec_elt (nm->processes, n->runtime_index);
+          void *data;
+          data =
+      vlib_process_signal_event_helper (nm, n, p,
+                te->event_type_index,
+                te->n_data_elts,
+                te->n_data_elt_bytes);
+          if (te->n_data_bytes < sizeof (te->inline_event_data))
+      clib_memcpy (data, te->inline_event_data,
+             te->n_data_bytes);
+          else
+      {
+        clib_memcpy (data, te->event_data_as_vector,
+               te->n_data_bytes);
+        vec_free (te->event_data_as_vector);
+      }
+          pool_put (nm->signal_timed_event_data_pool, te);
+        }
+      else
+        {
+          cpu_time_now = clib_cpu_time_now ();
+          cpu_time_now =
+      dispatch_suspended_process (vm, di, cpu_time_now);
+        }
+    }
 
-	      /* Reset vector. */
-	      _vec_len (nm->data_from_advancing_timing_wheel) = 0;
-	    }
-	}
+        /* Reset vector. */
+        _vec_len (nm->data_from_advancing_timing_wheel) = 0;
+      }
+  }
 
       /* Input nodes may have added work to the pending vector.
          Process pending vector until there is nothing left.
          All pending vectors will be processed from input -> output. */
       for (i = 0; i < _vec_len (nm->pending_frames); i++)
-	cpu_time_now = dispatch_pending_node (vm, nm->pending_frames + i,
-					      cpu_time_now);
+  cpu_time_now = dispatch_pending_node (vm, nm->pending_frames + i,
+                cpu_time_now);
+
+///////////////////////////////////////////////
+    /*update costs*/
+  if(PREDICT_TRUE(_vec_len(nm->pending_frames))>=1){
+    fairdrop_main_t *fm = &fairdrop_main;
+    u32 cpu_index = os_get_cpu_number ();
+    fm->enable_poller[cpu_index] = 1;
+  }
+//////////////////////////////////////////////
+
       /* Reset pending vector for next iteration. */
       _vec_len (nm->pending_frames) = 0;
 
       /* Pending internal nodes may resume processes. */
       if (is_main && _vec_len (nm->data_from_advancing_timing_wheel) > 0)
-	goto processes_timing_wheel_data;
+  goto processes_timing_wheel_data;
 
       vlib_increment_main_loop_counter (vm);
+
 
       /* Record time stamp in case there are no enabled nodes and above
          calls do not update time stamp. */
@@ -1624,13 +1637,13 @@ vlib_main_configure (vlib_main_t * vm, unformat_input_t * input)
   while (unformat_check_input (input) != UNFORMAT_END_OF_INPUT)
     {
       if (unformat (input, "memory-trace"))
-	turn_on_mem_trace = 1;
+  turn_on_mem_trace = 1;
 
       else if (unformat (input, "elog-events %d",
-			 &vm->elog_main.event_ring_size))
-	;
+       &vm->elog_main.event_ring_size))
+  ;
       else
-	return unformat_parse_error (input);
+  return unformat_parse_error (input);
     }
 
   unformat_free (input);
@@ -1692,9 +1705,9 @@ vlib_main (vlib_main_t * volatile vm, unformat_input_t * input)
     {
       /* Arrange for graph hook up error to not be fatal when debugging. */
       if (CLIB_DEBUG > 0)
-	clib_error_report (error);
+  clib_error_report (error);
       else
-	goto done;
+  goto done;
     }
 
   /* See unix/main.c; most likely already set up */
@@ -1705,8 +1718,8 @@ vlib_main (vlib_main_t * volatile vm, unformat_input_t * input)
 
   /* Create default buffer free list. */
   vlib_buffer_get_or_create_free_list (vm,
-				       VLIB_BUFFER_DEFAULT_FREE_LIST_BYTES,
-				       "default");
+               VLIB_BUFFER_DEFAULT_FREE_LIST_BYTES,
+               "default");
 
   switch (clib_setjmp (&vm->main_loop_exit, VLIB_MAIN_LOOP_EXIT_NONE))
     {
