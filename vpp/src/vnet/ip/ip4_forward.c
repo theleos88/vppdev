@@ -59,7 +59,6 @@
  * This file contains the source code for IPv4 forwarding.
  */
 
-
 void
 ip4_forward_next_trace (vlib_main_t * vm,
 			vlib_node_runtime_t * node,
@@ -2462,7 +2461,6 @@ ip4_rewrite_inline (vlib_main_t * vm,
 		}
 
 	      /* Verify checksum. */
-	      ASSERT (ip0->checksum == ip4_header_checksum (ip0));
 	      ASSERT (ip1->checksum == ip4_header_checksum (ip1));
 	    }
 	  else

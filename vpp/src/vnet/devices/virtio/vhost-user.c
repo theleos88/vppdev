@@ -303,7 +303,7 @@ unmap_all_mem_regions (vhost_user_intf_t * vui)
 
 	  ssize_t map_sz = (vui->regions[i].memory_size +
 			    vui->regions[i].mmap_offset +
-			    page_sz) & ~(page_sz - 1);
+			    page_sz - 1) & ~(page_sz - 1);
 
 	  r =
 	    munmap (vui->region_mmap_addr[i] - vui->regions[i].mmap_offset,
@@ -928,7 +928,7 @@ vhost_user_socket_read (unix_file_t * uf)
 	  /* align size to 2M page */
 	  ssize_t map_sz = (vui->regions[i].memory_size +
 			    vui->regions[i].mmap_offset +
-			    page_sz) & ~(page_sz - 1);
+			    page_sz - 1) & ~(page_sz - 1);
 
 	  vui->region_mmap_addr[i] = mmap (0, map_sz, PROT_READ | PROT_WRITE,
 					   MAP_SHARED, fds[i], 0);
@@ -1179,7 +1179,7 @@ vhost_user_socket_read (unix_file_t * uf)
 	/* align size to 2M page */
 	long page_sz = get_huge_page_size (fd);
 	ssize_t map_sz =
-	  (msg.log.size + msg.log.offset + page_sz) & ~(page_sz - 1);
+	  (msg.log.size + msg.log.offset + page_sz - 1) & ~(page_sz - 1);
 
 	vui->log_base_addr = mmap (0, map_sz, PROT_READ | PROT_WRITE,
 				   MAP_SHARED, fd, 0);
@@ -1575,6 +1575,7 @@ vhost_user_input_rewind_buffers (vlib_main_t * vm,
       b_current->current_length = 0;
       b_current->flags = 0;
     }
+  cpu->rx_buffers_len++;
 }
 
 static u32
@@ -1752,7 +1753,8 @@ vhost_user_if_input (vlib_main_t * vm,
 	      desc_current = 0;
 	      if (PREDICT_FALSE (desc_table == 0))
 		{
-		  //FIXME: Handle error by shutdown the queue
+		  vlib_error_count (vm, node->node_index,
+				    VHOST_USER_INPUT_FUNC_ERROR_MMAP_FAIL, 1);
 		  goto out;
 		}
 	    }
@@ -1829,7 +1831,8 @@ vhost_user_if_input (vlib_main_t * vm,
 		desc_table[desc_current].len - desc_data_offset;
 	      cpy->len = VLIB_BUFFER_DATA_SIZE - b_current->current_length;
 	      cpy->len = (cpy->len > desc_data_l) ? desc_data_l : cpy->len;
-	      cpy->dst = (uword) vlib_buffer_get_current (b_current);
+	      cpy->dst = (uword) (vlib_buffer_get_current (b_current) +
+				  b_current->current_length);
 	      cpy->src = desc_table[desc_current].addr + desc_data_offset;
 
 	      desc_data_offset += cpy->len;
@@ -1883,13 +1886,8 @@ vhost_user_if_input (vlib_main_t * vm,
 		  (vhost_user_input_copy (vui, vum->cpus[cpu_index].copy,
 					  copy_len, &map_hint)))
 		{
-		  clib_warning
-		    ("Memory mapping error on interface hw_if_index=%d "
-		     "(Shutting down - Switch interface down and up to restart)",
-		     vui->hw_if_index);
-		  vui->admin_up = 0;
-		  copy_len = 0;
-		  break;
+		  vlib_error_count (vm, node->node_index,
+				    VHOST_USER_INPUT_FUNC_ERROR_MMAP_FAIL, 1);
 		}
 	      copy_len = 0;
 
@@ -1908,10 +1906,8 @@ vhost_user_if_input (vlib_main_t * vm,
       (vhost_user_input_copy (vui, vum->cpus[cpu_index].copy,
 			      copy_len, &map_hint)))
     {
-      clib_warning ("Memory mapping error on interface hw_if_index=%d "
-		    "(Shutting down - Switch interface down and up to restart)",
-		    vui->hw_if_index);
-      vui->admin_up = 0;
+      vlib_error_count (vm, node->node_index,
+			VHOST_USER_INPUT_FUNC_ERROR_MMAP_FAIL, 1);
     }
 
   /* give buffers back to driver */
@@ -2339,10 +2335,8 @@ done:
       (vhost_user_tx_copy (vui, vum->cpus[cpu_index].copy,
 			   copy_len, &map_hint)))
     {
-      clib_warning ("Memory mapping error on interface hw_if_index=%d "
-		    "(Shutting down - Switch interface down and up to restart)",
-		    vui->hw_if_index);
-      vui->admin_up = 0;
+      vlib_error_count (vm, node->node_index,
+			VHOST_USER_TX_FUNC_ERROR_MMAP_FAIL, 1);
     }
 
   CLIB_MEMORY_BARRIER ();

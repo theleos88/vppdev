@@ -24,10 +24,12 @@
 # start autotools ignore
 autom4te.cache/
 config/
+Makefile
 Makefile.in
 aclocal.m4
 app.info
 compile
+config.h
 config.h.in
 config.log
 config.guess
