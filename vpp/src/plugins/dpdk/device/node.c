@@ -33,7 +33,6 @@
 #include <dpdk/device/flow_table_var.h>
 #include <vppinfra/elog.h>
 
-#include <dpdk/device/fairdrop.h>
 
 #define WEIGHT_IP   320 
 #define WEIGHT_IP6  416 

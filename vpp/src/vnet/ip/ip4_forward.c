@@ -2461,6 +2461,7 @@ ip4_rewrite_inline (vlib_main_t * vm,
 		}
 
 	      /* Verify checksum. */
+	      ASSERT (ip0->checksum == ip4_header_checksum (ip0));
 	      ASSERT (ip1->checksum == ip4_header_checksum (ip1));
 	    }
 	  else
