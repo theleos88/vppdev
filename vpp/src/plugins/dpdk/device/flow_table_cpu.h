@@ -236,7 +236,7 @@ always_inline void update_costs(vlib_main_t *vm,u32 index){
     costlen_t *cost = costtable[index];
     if(PREDICT_FALSE(costpernode[index]==NULL)){
         costpernode[index]=malloc(sizeof(costpernode_t));
-        memset(costpernde[index],0,sizeof(costpernode_t));
+        memset(costpernode[index],0,sizeof(costpernode_t));
     }
     costpernode_t * cost_node = costpernode[index];
 
@@ -249,7 +249,7 @@ always_inline void update_costs(vlib_main_t *vm,u32 index){
     vlib_node_sync_stats (vm, ip4_chain);
     dpdk = (f64)(ip4_chain->stats_total.clocks - cost_node->inout.dpdk_input.clocks)/(f64)(ip4_chain->stats_total.vectors - cost_node->inout.dpdk_input.vectors);
     costip4 += dpdk;
-    ccost_node->inout.dpdk_input.clocks = ip4_chain->stats_total.clocks;
+    cost_node->inout.dpdk_input.clocks = ip4_chain->stats_total.clocks;
     cost_node->inout.dpdk_input.vectors = ip4_chain->stats_total.vectors;
 
     ip4_chain = vlib_get_node_by_name (vm, (u8 *) "ip4-input-no-checksum");
@@ -326,7 +326,7 @@ always_inline void update_vstate(vlib_main_t * vm,u32 index){
     nodet[0][index]->vqueue += nodet[0][index]->n_packets*(cost->costip4);
     nodet[0][index]->n_packets=0;
     }
-    if(PREDICT_TRUE(nodet[1][cpu_index]!=NULL)){
+    if(PREDICT_TRUE(nodet[1][index]!=NULL)){
     nodet[1][index]->vqueue += nodet[1][index]->n_packets*(cost->costip6);
     nodet[1][index]->n_packets=0;
     }
