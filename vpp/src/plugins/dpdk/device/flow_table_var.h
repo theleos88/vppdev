@@ -12,5 +12,5 @@ u32 nbl[24];
 u64 t[24] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 u64 old_t[24];
 u8 hello_world[24] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-//costs_t * costtable;
-fairdrop_main_t fairdrop_main;
+/costlen_t * costtable[24];
+costpernode_t * costpernode[24];

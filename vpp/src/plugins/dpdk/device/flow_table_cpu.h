@@ -37,11 +37,85 @@ typedef struct activelist{
     struct activelist * next;
 }activelist_t;
 
+typedef struct costlen{
+    f64 costip4;
+    f64 costip6;
+}costlen_t;
+
+typedef struct costpernode
+{
+  union{
+    struct
+    {
+      u64 clocks;
+      u64 vectors;
+    }ip4_input_no_checksum;
+    struct
+      {
+          u64 clocks;
+          u64 vectors;
+      }ip4_load_balance;
+    struct
+      {
+          u64 clocks;
+          u64 vectors;
+      }ip4_lookup;
+    struct
+      {
+          u64 clocks;
+          u64 vectors;
+      }ip4_rewrite;
+  }ip4;
+
+  union{
+    struct
+    {
+        u64 clocks;
+        u64 vectors;
+    }ip6_input;
+  struct
+    {
+        u64 clocks;
+        u64 vectors;
+    }ip6_lookup;
+  struct
+    {
+        u64 clocks;
+        u64 vectors;
+    }ip6_rewrite;
+  struct
+    {
+        u64 clocks;
+        u64 vectors;
+    }interface_output;
+  }ip6;
+
+  union{
+    struct
+    {
+        u64 clocks;
+        u64 vectors;
+    }dpdk_input;
+  struct
+    {
+        u64 clocks;
+        u64 vectors;
+    }tge_output;
+  struct
+    {
+        u64 clocks;
+        u64 vectors;
+    }tge_tx;
+  }inout;
+}costpernode_t;
+
+
 extern flowcount_t *  nodet[256][24];
 extern activelist_t * head_af[24];
 extern activelist_t * tail_af[24];
 extern flowcount_t *  head [24];
-//extern costs_t * costtable;
+extern costlen_t * costtable[24];
+extern costpernode_t * costpernode[24];
 extern int numflows;
 extern u32 r_qtotal;
 extern u32 nbl[24];
@@ -151,6 +225,7 @@ always_inline u8 fq (u8 modulox,u32 cpu_index){
     drop = arrival(i,cpu_index);
     return drop;
 }
+
 
 /*vstate update function before sending the vector. This function is after processing all the packets in the vector and runs only once per vector */
 always_inline void departure (u32 cpu_index){
