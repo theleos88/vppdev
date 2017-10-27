@@ -110,18 +110,18 @@ typedef struct costpernode
 }costpernode_t;
 
 
-extern flowcount_t *  nodet[256][2];
-extern activelist_t * head_af[2];
-extern activelist_t * tail_af[2];
-extern flowcount_t *  head [2];
-extern costlen_t * costtable[2];
-extern costpernode_t * costpernode[2];
+extern flowcount_t *  nodet[256][24];
+extern activelist_t * head_af[24];
+extern activelist_t * tail_af[24];
+extern flowcount_t *  head [24];
+extern costlen_t * costtable[24];
+extern costpernode_t * costpernode[24];
 extern int numflows;
 extern u32 r_qtotal;
-extern u32 nbl[2];
-extern u64 t[2];
-extern u64 old_t[2];
-extern u8 hello_world[2];
+extern u32 nbl[24];
+extern u64 t[24];
+extern u64 old_t[24];
+extern u8 hello_world[24];
 /* Flow classification function */
 always_inline flowcount_t *
 flow_table_classify(u8 modulox,u32 cpu_index){
@@ -335,7 +335,6 @@ always_inline void update_vstate(vlib_main_t * vm,u32 index){
     nodet[1][index]->n_packets=0;
     }
 }
-
 
 /*vstate update function before sending the vector. This function is after processing all the packets in the vector and runs only once per vector */
 always_inline void departure (u32 cpu_index){
