@@ -1593,13 +1593,13 @@ vlib_main_or_worker_loop (vlib_main_t * vm, int is_main)
 ///////////////////////////////////////////////
     /*update costs*/
 	/* Add a variable to measure old_count*/
-	if(PREDICT_FALSE(vm->main_loop_count - old_count >= 100){
+	//if(PREDICT_FALSE(vm->main_loop_count - old_count >= 100){
   		if(PREDICT_TRUE(_vec_len(nm->pending_frames))>=1){
     		fairdrop_main_t *fm = &fairdrop_main;
     		u32 cpu_index = os_get_cpu_number ();
     		fm->enable_poller[cpu_index] = 1;
   		}
-	}
+	//}
 //////////////////////////////////////////////
 
       /* Reset pending vector for next iteration. */
