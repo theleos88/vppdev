@@ -229,6 +229,9 @@ always_inline u8 fq (u8 modulox,u32 cpu_index){
 /*Function to update costs*/
 always_inline void update_costs(vlib_main_t *vm,u32 index){
 
+    if (PREDICT_FALSE(hello_world[index]<=5)){
+        hello_world++;
+
     if(PREDICT_FALSE(costtable[index]==NULL)){
         costtable[index] = malloc(sizeof(costlen_t));
         memset(costtable[index], 0, sizeof (costlen_t));
@@ -317,6 +320,7 @@ always_inline void update_costs(vlib_main_t *vm,u32 index){
 
     cost->costip4 = costip4;
     cost->costip6 = costip6;
+    }
 }
 
 /*function to increment vqueues using the updated costs*/
