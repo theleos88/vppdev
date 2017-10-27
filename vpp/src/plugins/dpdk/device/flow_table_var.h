@@ -1,5 +1,5 @@
 #include <plugins/dpdk/device/flow_table_cpu.h>
-flowcount_t *  nodet[24][256] ;
+flowcount_t *  nodet[256][2] ;
 activelist_t * head_af[2];
 activelist_t * tail_af[2];
 flowcount_t *  head[2] ;

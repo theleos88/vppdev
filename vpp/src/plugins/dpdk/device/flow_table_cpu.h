@@ -110,7 +110,7 @@ typedef struct costpernode
 }costpernode_t;
 
 
-extern flowcount_t *  nodet[2][256];
+extern flowcount_t *  nodet[256][2];
 extern activelist_t * head_af[2];
 extern activelist_t * tail_af[2];
 extern flowcount_t *  head [2];
@@ -129,11 +129,11 @@ flow_table_classify(u8 modulox,u32 cpu_index){
     flowcount_t * flow;
 
     if(PREDICT_FALSE(nodet[modulox][cpu_index]==NULL)){
-        nodet[cpu_index][modulox] = malloc(sizeof(flowcount_t));
-        nodet[cpu_index][modulox]->vqueue=0;
-        nodet[cpu_index][modulox]->n_packets=0;
+        nodet[modulox][cpu_index] = malloc(sizeof(flowcount_t));
+        nodet[modulox][cpu_index]->vqueue=0;
+        nodet[modulox][cpu_index]->n_packets=0;
     }
-        flow = nodet[cpu_index][modulox];
+        flow = nodet[modulox][cpu_index];
 
     return flow;
 }
