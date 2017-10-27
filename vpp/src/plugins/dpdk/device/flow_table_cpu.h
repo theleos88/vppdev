@@ -230,7 +230,7 @@ always_inline u8 fq (u8 modulox,u32 cpu_index){
 always_inline void update_costs(vlib_main_t *vm,u32 index){
 
     if (PREDICT_FALSE(hello_world[index]<=5)){
-        hello_world++;
+        hello_world[index]++;
 
     if(PREDICT_FALSE(costtable[index]==NULL)){
         costtable[index] = malloc(sizeof(costlen_t));
