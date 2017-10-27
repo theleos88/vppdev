@@ -28,6 +28,119 @@
 
 #include <dpdk/device/dpdk_priv.h>
 
+/////////////////////////////////////////////
+#include <dpdk/device/flow_table_cpu.h>
+#include <dpdk/device/flow_table_var.h>
+#include <vppinfra/elog.h>
+
+#include <dpdk/device/fairdrop.h>
+
+#define WEIGHT_IP   320 
+#define WEIGHT_IP6  416 
+#define WEIGHT_L2   (224)
+#define DEFAULT_CREDIT (80000)
+#define HELLO 1
+
+always_inline void update_costs(vlib_main_t *vm){
+
+	costlen_t *cost = fm->costlen + index;
+	ip4_t *cost_ip4 = fm->cost_ip4 + index;
+	ip6_t *cost_ip6 = fm->cost_ip6 + index;
+	inout_t *cost_inout = fm->cost_inout + index;
+
+	f64 costip4;
+	f64 costip6;
+	f64 dpdk,out,tx;
+	costip4 = costip6 = 0;
+
+	vlib_node_t *ip4_chain = vlib_get_node_by_name (vm, (u8 *) "dpdk-input");
+	vlib_node_sync_stats (vm, ip4_chain);
+	dpdk = (f64)(ip4_chain->stats_total.clocks - cost_inout->dpdk_input.clocks)/(f64)(ip4_chain->stats_total.vectors - cost_inout->dpdk_input.vectors);
+	costip4 += dpdk;
+	cost_inout->dpdk_input.clocks = ip4_chain->stats_total.clocks;
+	cost_inout->dpdk_input.vectors = ip4_chain->stats_total.vectors;
+
+	ip4_chain = vlib_get_node_by_name (vm, (u8 *) "ip4-input-no-checksum");
+	vlib_node_sync_stats (vm, ip4_chain);
+	costip4 += (f64)(ip4_chain->stats_total.clocks - cost_ip4->ip4_input_no_checksum.clocks)/(f64)(ip4_chain->stats_total.vectors - cost_ip4->ip4_input_no_checksum.vectors);
+	cost_ip4->ip4_input_no_checksum.clocks = ip4_chain->stats_total.clocks;
+	cost_ip4->ip4_input_no_checksum.vectors = ip4_chain->stats_total.vectors;
+
+	ip4_chain = vlib_get_node_by_name (vm, (u8 *) "ip4-load-balance");
+	vlib_node_sync_stats (vm, ip4_chain);
+	costip4 += (f64)(ip4_chain->stats_total.clocks - cost_ip4->ip4_load_balance.clocks)/(f64)(ip4_chain->stats_total.vectors - cost_ip4->ip4_load_balance.vectors);
+	cost_ip4->ip4_load_balance.clocks = ip4_chain->stats_total.clocks;
+	cost_ip4->ip4_load_balance.vectors = ip4_chain->stats_total.vectors;
+
+	ip4_chain = vlib_get_node_by_name (vm, (u8 *) "ip4-lookup");
+	vlib_node_sync_stats (vm, ip4_chain);
+	costip4 += (f64)(ip4_chain->stats_total.clocks - cost_ip4->ip4_lookup.clocks)/(f64)(ip4_chain->stats_total.vectors - cost_ip4->ip4_lookup.vectors);
+	cost_ip4->ip4_lookup.clocks = ip4_chain->stats_total.clocks;
+	cost_ip4->ip4_lookup.vectors = ip4_chain->stats_total.vectors;
+
+	ip4_chain = vlib_get_node_by_name (vm, (u8 *) "ip4-rewrite");
+	vlib_node_sync_stats (vm, ip4_chain);
+	costip4 += (f64)(ip4_chain->stats_total.clocks - cost_ip4->ip4_rewrite.clocks)/(f64)(ip4_chain->stats_total.vectors - cost_ip4->ip4_rewrite.vectors);
+	cost_ip4->ip4_rewrite.clocks = ip4_chain->stats_total.clocks;
+	cost_ip4->ip4_rewrite.vectors = ip4_chain->stats_total.vectors;
+
+	ip4_chain = vlib_get_node_by_name (vm, (u8 *) "TenGigabitEthernet84/0/1-output");
+	vlib_node_sync_stats (vm, ip4_chain);
+	out = (f64)(ip4_chain->stats_total.clocks - cost_inout->tge_output.clocks)/(f64)(ip4_chain->stats_total.vectors - cost_inout->tge_output.vectors);
+	costip4 += out;
+	cost_inout->tge_output.clocks = ip4_chain->stats_total.clocks;
+	cost_inout->tge_output.vectors = ip4_chain->stats_total.vectors;
+
+	ip4_chain = vlib_get_node_by_name (vm, (u8 *) "TenGigabitEthernet84/0/1-tx");
+	vlib_node_sync_stats (vm, ip4_chain);
+	tx = (f64)(ip4_chain->stats_total.clocks - cost_inout->tge_tx.clocks)/(f64)(ip4_chain->stats_total.vectors - cost_inout->tge_tx.vectors);
+	costip4 += tx;
+	cost_inout->tge_tx.clocks = ip4_chain->stats_total.clocks;
+	cost_inout->tge_tx.vectors = ip4_chain->stats_total.vectors;
+
+	costip6 += dpdk+out+tx;
+	vlib_node_t *ip6_chain = vlib_get_node_by_name (vm, (u8 *) "ip6-input");
+	vlib_node_sync_stats (vm, ip6_chain);
+	costip6 += (f64)(ip6_chain->stats_total.clocks - cost_ip6->ip6_input.clocks)/(f64)(ip6_chain->stats_total.vectors - cost_ip6->ip6_input.vectors);
+	cost_ip6->ip6_input.clocks = ip6_chain->stats_total.clocks;
+	cost_ip6->ip6_input.vectors = ip6_chain->stats_total.vectors;
+
+	ip6_chain = vlib_get_node_by_name (vm, (u8 *) "ip6-lookup");
+	vlib_node_sync_stats (vm, ip6_chain);
+	costip6 += (f64)(ip6_chain->stats_total.clocks - cost_ip6->ip6_lookup.clocks)/(f64)(ip6_chain->stats_total.vectors - cost_ip6->ip6_lookup.vectors);
+	cost_ip6->ip6_lookup.clocks = ip6_chain->stats_total.clocks;
+	cost_ip6->ip6_lookup.vectors = ip6_chain->stats_total.vectors;
+
+	ip6_chain = vlib_get_node_by_name (vm, (u8 *) "ip6-rewrite");
+	vlib_node_sync_stats (vm, ip6_chain);
+	costip6 += (f64)(ip6_chain->stats_total.clocks - cost_ip6->ip6_rewrite.clocks)/(f64)(ip6_chain->stats_total.vectors - cost_ip6->ip6_rewrite.vectors);
+	cost_ip6->ip6_rewrite.clocks = ip6_chain->stats_total.clocks;
+	cost_ip6->ip6_rewrite.vectors = ip6_chain->stats_total.vectors;
+
+	ip6_chain = vlib_get_node_by_name (vm, (u8 *) "interface-output");
+	vlib_node_sync_stats (vm, ip6_chain);
+	costip6 += (f64)(ip6_chain->stats_total.clocks - cost_ip6->interface_output.clocks)/(f64)(ip6_chain->stats_total.vectors - cost_ip6->interface_output.vectors);
+	cost_ip6->interface_output.clocks = ip6_chain->stats_total.clocks;
+	cost_ip6->interface_output.vectors = ip6_chain->stats_total.vectors;
+
+	cost->costip4 = costip4;
+	cost->costip6 = costip6;
+}
+
+always_inline void update_vstate(fairdrop_main_t * fm,u32 cpu_index){
+	costlen_t *cost = fm->costlen + cpu_index;
+	if(PREDICT_TRUE(nodet[0][cpu_index]!=NULL)){
+    nodet[0][cpu_index]->vqueue += nodet[0][cpu_index]->n_packets*(cost->costip4);
+    nodet[0][cpu_index]->n_packets=0;
+	}
+	if(PREDICT_TRUE(nodet[1][cpu_index]!=NULL)){
+    nodet[1][cpu_index]->vqueue += nodet[1][cpu_index]->n_packets*(cost->costip6);
+    nodet[1][cpu_index]->n_packets=0;
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+
 static char *dpdk_error_strings[] = {
 #define _(n,s) s,
   foreach_dpdk_error
@@ -340,6 +453,19 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
       u32 bi3, next3;
       u8 error0, error1, error2, error3;
       u64 or_ol_flags;
+//////////////////////////////////////////////
+      u16 pktlen0,pktlen1,pktlen2,pktlen3;
+      u8  drop0,drop1,drop2,drop3 ;
+      u8 classip0, classip1, classip2, classip3;
+      u8 classipv60, classipv61, classipv62, classipv63;
+      u8 classl20, classl21, classl22, classl23;
+      u8 modulo0,modulo1,modulo2,modulo3;
+      u8 first=1;
+    //u8 initfirst=1;
+      update_costs();
+      update_vstate();
+      old_t[cpu_index] = t[cpu_index];
+//////////////////////////////////////////////
 
       vlib_get_next_frame (vm, node, next_index, to_next, n_left_to_next);
 
@@ -373,6 +499,14 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
 	      if (PREDICT_FALSE (mb3->nb_segs > 1))
 		dpdk_prefetch_buffer (mb3->next);
 	    }
+
+/////////////////////////////////
+    if(PREDICT_FALSE(first==1)){
+      t[cpu_index] = mb0->udata64;
+      departure(cpu_index);
+      first=0;
+    }
+/////////////////////////////////
 
 	  b0 = vlib_buffer_from_rte_mbuf (mb0);
 	  b1 = vlib_buffer_from_rte_mbuf (mb1);
