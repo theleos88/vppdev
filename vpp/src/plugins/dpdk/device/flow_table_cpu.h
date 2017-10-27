@@ -110,18 +110,18 @@ typedef struct costpernode
 }costpernode_t;
 
 
-extern flowcount_t *  nodet[256][24];
-extern activelist_t * head_af[24];
-extern activelist_t * tail_af[24];
-extern flowcount_t *  head [24];
-extern costlen_t * costtable[24];
-extern costpernode_t * costpernode[24];
+extern flowcount_t *  nodet[2][256];
+extern activelist_t * head_af[2];
+extern activelist_t * tail_af[2];
+extern flowcount_t *  head [2];
+extern costlen_t * costtable[2];
+extern costpernode_t * costpernode[2];
 extern int numflows;
 extern u32 r_qtotal;
-extern u32 nbl[24];
-extern u64 t[24];
-extern u64 old_t[24];
-extern u8 hello_world[24];
+extern u32 nbl[2];
+extern u64 t[2];
+extern u64 old_t[2];
+extern u8 hello_world[2];
 /* Flow classification function */
 always_inline flowcount_t *
 flow_table_classify(u8 modulox,u32 cpu_index){
@@ -129,11 +129,11 @@ flow_table_classify(u8 modulox,u32 cpu_index){
     flowcount_t * flow;
 
     if(PREDICT_FALSE(nodet[modulox][cpu_index]==NULL)){
-        nodet[modulox][cpu_index] = malloc(sizeof(flowcount_t));
-        nodet[modulox][cpu_index]->vqueue=0;
-        nodet[modulox][cpu_index]->n_packets=0;
+        nodet[cpu_index][modulox] = malloc(sizeof(flowcount_t));
+        nodet[cpu_index][modulox]->vqueue=0;
+        nodet[cpu_index][modulox]->n_packets=0;
     }
-        flow = nodet[modulox][cpu_index];
+        flow = nodet[cpu_index][modulox];
 
     return flow;
 }

@@ -1,15 +1,15 @@
 #include <plugins/dpdk/device/flow_table_cpu.h>
-flowcount_t *  nodet[256][24] ;
-activelist_t * head_af[24];
-activelist_t * tail_af[24];
-flowcount_t *  head[24] ;
+flowcount_t *  nodet[24][256] ;
+activelist_t * head_af[2];
+activelist_t * tail_af[2];
+flowcount_t *  head[2] ;
 flowcount_t *  previousnode;
-flowcount_t *  tail[24];
+flowcount_t *  tail[2];
 int numflows;
 u32 r_qtotal;
-u32 nbl[24];
-u64 t[24] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-u64 old_t[24];
-u8 hello_world[24] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-costlen_t * costtable[24];
-costpernode_t * costpernode[24];
+u32 nbl[2];
+u64 t[2] = {0,0};//{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+u64 old_t[2];
+u8 hello_world[2] = {0,0};//{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+costlen_t * costtable[2];
+costpernode_t * costpernode[2];
