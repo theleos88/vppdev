@@ -229,16 +229,16 @@ always_inline u8 fq (u8 modulox,u32 cpu_index){
 /*Function to update costs*/
 always_inline void update_costs(vlib_main_t *vm,u32 index){
 
-    if(PREDICT_FALSE(costable+index==NULL)){
-        costtable+index = malloc(sizeof(costlen_t));
-        memset(costtable+index, 0, sizeof (costlen_t));
+    if(PREDICT_FALSE(costtable[index]==NULL)){
+        costtable[index] = malloc(sizeof(costlen_t));
+        memset(costtable[index], 0, sizeof (costlen_t));
     }
-    costlen_t *cost = costtable + index;
-    if(PREDICT_FALSE(costpernode+index==NULL)){
-        costpernode+index=malloc(sizeof(costpernode_t));
-        memset(costpernde+index,0,sizeof(costpernode_t));
+    costlen_t *cost = costtable[index];
+    if(PREDICT_FALSE(costpernode[index]==NULL)){
+        costpernode[index]=malloc(sizeof(costpernode_t));
+        memset(costpernde[index],0,sizeof(costpernode_t));
     }
-    costpernode_t * cost_node = costpernode+index;
+    costpernode_t * cost_node = costpernode[index];
 
     f64 costip4;
     f64 costip6;
@@ -321,7 +321,7 @@ always_inline void update_costs(vlib_main_t *vm,u32 index){
 
 /*function to increment vqueues using the updated costs*/
 always_inline void update_vstate(vlib_main_t * vm,u32 index){
-    costlen_t *cost = costtable + index;
+    costlen_t *cost = costtable[index];
     if(PREDICT_TRUE(nodet[0][index]!=NULL)){
     nodet[0][index]->vqueue += nodet[0][index]->n_packets*(cost->costip4);
     nodet[0][index]->n_packets=0;
