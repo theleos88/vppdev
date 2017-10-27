@@ -65,6 +65,21 @@ dpdk_main_t dpdk_main;
 
 #include <vlibapi/api_helper_macros.h>
 
+
+static uint16_t
+add_timestamps(uint8_t port __rte_unused, uint16_t qidx __rte_unused,
+        struct rte_mbuf **pkts, uint16_t nb_pkts,
+        uint16_t max_pkts __rte_unused, void *_ __rte_unused)
+{
+    unsigned i;
+    uint64_t rx_timestamp = rte_rdtsc();
+
+    for (i = 0; i < nb_pkts; i++)
+        pkts[i]->udata64 = rx_timestamp;
+    return nb_pkts;
+}
+
+
 static void
   vl_api_sw_interface_set_dpdk_hqos_pipe_t_handler
   (vl_api_sw_interface_set_dpdk_hqos_pipe_t * mp)
@@ -601,6 +616,7 @@ dpdk_lib_init (dpdk_main_t * dm)
       xd->nb_rx_desc = DPDK_NB_RX_DESC_DEFAULT;
       xd->nb_tx_desc = DPDK_NB_TX_DESC_DEFAULT;
       xd->cpu_socket = (i8) rte_eth_dev_socket_id (i);
+
 
       /* Handle interface naming for devices with multiple ports sharing same PCI ID */
       if (dev_info.pci_dev)
@@ -1854,6 +1870,12 @@ dpdk_process (vlib_main_t * vm, vlib_node_runtime_t * rt, vlib_frame_t * f)
 	  {
 	    xd = &dm->devices[i];
 	    ASSERT (i == xd->device_index);
+
+///////////////////////////////////////
+/* RX callback function which is added to the port/queue to timestamp each received packet */
+		rte_eth_add_rx_callback((uint8_t)(i), 0, add_timestamps, NULL);
+//////////////////////////////////////
+
 	    if (xd->pmd == VNET_DPDK_PMD_BOND)
 	      {
 		u8 addr[6];
