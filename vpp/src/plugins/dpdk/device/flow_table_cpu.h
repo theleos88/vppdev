@@ -28,8 +28,8 @@
 typedef struct flowcount{
     u32 n_packets;
     u32 vqueue;
-    struct flowcount * branchnext;
-    struct flowcount * update;
+//    struct flowcount * branchnext;
+//    struct flowcount * update;
 }flowcount_t;
 
 typedef struct activelist{
@@ -122,9 +122,10 @@ always_inline void vstate(flowcount_t * flow,u8 update,u32 cpu_index){
         if (flow->vqueue == 0){
             nbl[cpu_index]++;
             flowin(flow,cpu_index);
+			flow->vqueue = 1;
         }
         //flow->vqueue += pktlenx;
-		flow->n_packets+=1;
+		flow->n_packets++;
     }
 }
 
@@ -153,6 +154,7 @@ always_inline u8 fq (u8 modulox,u32 cpu_index){
 }
 
 /*vstate update function before sending the vector. This function is after processing all the packets in the vector and runs only once per vector */
+
 always_inline void departure (u32 cpu_index){
     vstate(NULL,1,cpu_index);
 }

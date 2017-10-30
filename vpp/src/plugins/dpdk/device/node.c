@@ -275,18 +275,25 @@ fairdrop_thread_fn (void *arg)
     {
       /* 1 second poll interval */
 	/*Segmentation fault when time is given in nanoseconds. Some kernel parameter is set wrong*/
-      fairdrop_delay (fm, 0 /* secs */ , 100 /* nsec */ );
+      fairdrop_delay (fm, 0 /* secs */ , 1000 /* nsec */ );
 
 	for (int i=0;i<vec_len(vlib_mains);i++){
 		if(!fm->enable_poller[i])
 			continue;
-      fairdrop_dslock_with_hint(1/*hint*/,1/*tag*/,i/*cpu_index*/);
-      update_costs(fm,i);
-      update_vstate(fm,i);
-      fairdrop_dsunlock (1/*hint*/, 1/*tag*/, i/*cpu_index*/);
-	  fm->enable_poller[i] = 0;
+		if(fm->enable_poller[i]==1){
+      		fairdrop_dslock_with_hint(1/*hint*/,1/*tag*/,i/*cpu_index*/);
+      		update_costs(fm,i);
+      		update_vstate(fm,i);
+      		fairdrop_dsunlock (1/*hint*/, 1/*tag*/, i/*cpu_index*/);
+	  		fm->enable_poller[i] = 0;
+		}
+		else if(fm->enable_poller[i]==2){
+//			fairdrop_dslock_with_hint(3/*hint*/,3/*tag*/,i/*cpu_index*/);
+			departure(i);
+    		fairdrop_dsunlock (3/*hint*/, 3/*tag*/, i/*cpu_index*/);
+			fm->enable_poller[i]=0;
+		}
 	}
-
     }
 }
 
@@ -716,7 +723,11 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
       fairdrop_dslock_with_hint(3/*hint*/,3/*tag*/,cpu_index/*cpu_index*/);
       departure(cpu_index);
       fairdrop_dsunlock (3/*hint*/, 3/*tag*/, cpu_index/*cpu_index*/);
-      first=0;
+//	fairdrop_main_t *fm = &fairdrop_main;
+//    fairdrop_dslock_with_hint(3/*hint*/,3/*tag*/,cpu_index/*cpu_index*/);
+//    fm->enable_poller[cpu_index] = 2;
+//    fairdrop_dsunlock (3/*hint*/, 3/*tag*/, cpu_index/*cpu_index*/);
+	first=0;
     }
 /////////////////////////////////
 
@@ -844,6 +855,8 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
   modulo1 = (classip1)*0 + (classipv61)*1 + (classl21)*2;
   modulo2 = (classip2)*0 + (classipv62)*1 + (classl22)*2;
   modulo3 = (classip3)*0 + (classipv63)*1 + (classl23)*2;
+//	fairdrop_dslock_with_hint(2/*hint*/,2/*tag*/,cpu_index/*cpu_index*/);
+//    fairdrop_dsunlock (2/*hint*/, 2/*tag*/, cpu_index/*cpu_index*/);
     drop0 = fq(modulo0,cpu_index);
     drop1 = fq(modulo1,cpu_index);
     drop2 = fq(modulo2,cpu_index);
@@ -1041,12 +1054,6 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
      cpu_index, xd->vlib_sw_if_index, mb_index, n_rx_bytes);
 
   vnet_device_increment_rx_packets (cpu_index, mb_index);
-
-///////////////////
-  /*vstate update*/
-    //departure(cpu_index);
-//////////////////
-
 
   return mb_index;
 }
