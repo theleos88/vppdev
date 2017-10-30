@@ -28,8 +28,8 @@
 typedef struct flowcount{
     u32 n_packets;
     u32 vqueue;
-    struct flowcount * branchnext;
-    struct flowcount * update;
+//    struct flowcount * branchnext;
+//    struct flowcount * update;
 }flowcount_t;
 
 typedef struct activelist{
@@ -175,7 +175,7 @@ always_inline void vstate(flowcount_t * flow,u8 update,u32 cpu_index){
         credit = ((t[cpu_index]-old_t[cpu_index])*ALPHACPU);///(2.6);
         while (oldnbl>nbl[cpu_index] && nbl[cpu_index] > 0){
             oldnbl = nbl[cpu_index];
-            served = credit/nbl[cpu_index];
+            served = credit/(nbl[cpu_index]);
             credit = 0;
             for (int k=0;k<oldnbl;k++){
                 j = flowout(cpu_index);
@@ -196,9 +196,10 @@ always_inline void vstate(flowcount_t * flow,u8 update,u32 cpu_index){
         if (flow->vqueue == 0){
             nbl[cpu_index]++;
             flowin(flow,cpu_index);
+			flow->vqueue = 1;
         }
         //flow->vqueue += pktlenx;
-		flow->n_packets+=1;
+		flow->n_packets++;
     }
 }
 
@@ -229,8 +230,8 @@ always_inline u8 fq (u8 modulox,u32 cpu_index){
 /*Function to update costs*/
 always_inline void update_costs(vlib_main_t *vm,u32 index){
 
-    if (PREDICT_FALSE(hello_world[index]<=5)){
-        hello_world[index]++;
+    if (PREDICT_FALSE(hello_world[index]<=10)){
+        //hello_world[index]++;
 
     if(PREDICT_FALSE(costtable[index]==NULL)){
         costtable[index] = malloc(sizeof(costlen_t));
@@ -321,6 +322,7 @@ always_inline void update_costs(vlib_main_t *vm,u32 index){
     cost->costip4 = costip4;
     cost->costip6 = costip6;
     }
+	hello_world[index]++;
 }
 
 /*function to increment vqueues using the updated costs*/

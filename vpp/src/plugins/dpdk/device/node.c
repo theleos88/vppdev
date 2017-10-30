@@ -496,10 +496,10 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
   	modulo1 = (classip1)*0 + (classipv61)*1 + (classl21)*2;
   	modulo2 = (classip2)*0 + (classipv62)*1 + (classl22)*2;
   	modulo3 = (classip3)*0 + (classipv63)*1 + (classl23)*2;
-    drop0 = fq(modulo0,cpu_index);
-    drop1 = fq(modulo1,cpu_index);
-    drop2 = fq(modulo2,cpu_index);
-    drop3 = fq(modulo3,cpu_index);
+    drop0 = /*0*modulo0;*/fq(modulo0,cpu_index);
+    drop1 = /*0*modulo1;*/fq(modulo1,cpu_index);
+    drop2 = /*0*modulo2;*/fq(modulo2,cpu_index);
+    drop3 = /*0*modulo3;*/fq(modulo3,cpu_index);
 
     if(PREDICT_FALSE(drop0 == 1)){
         next0 = VNET_DEVICE_INPUT_NEXT_DROP;
@@ -609,7 +609,7 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
     classl20 = ~((classip0) | (classipv60)) & 00000001;
 
   	modulo0 = (classip0)*0 + (classipv60)*1 + (classl20)*2;
-    drop0 = fq(modulo0,cpu_index);
+    drop0 = /*0*modulo0;*/fq(modulo0,cpu_index);
     if(PREDICT_FALSE(drop0 == 1)){
         next0 = VNET_DEVICE_INPUT_NEXT_DROP;
         error0 = DPDK_ERROR_IP_CHECKSUM_ERROR;
