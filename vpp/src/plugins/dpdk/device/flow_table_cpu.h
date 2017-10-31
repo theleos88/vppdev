@@ -13,7 +13,7 @@
 #include <math.h>
 #ifndef FLOW_TABLE_H
 #define FLOW_TABLE_H
-#define ALPHACPU 1   // ALPHA = Output/Input
+#define ALPHACPU 0.7
 #define THRESHOLD 128000 //81920 //just a random number. Update the value with proper theoritical approach.
 
 #define WEIGHT_IP4	320
