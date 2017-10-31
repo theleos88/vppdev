@@ -230,16 +230,18 @@ always_inline void update_costs(vlib_main_t *vm,u32 index){
         memset(costtable[index], 0, sizeof (costlen_t));
     }
     costlen_t *cost = costtable[index];
-    if(PREDICT_TRUE(nodet[0][index]!=NULL && nodet[1][index]==NULL)){
-	if (nodet[0][index]->n_packets > 0)
-	cost->costip4 = (s_total[index]/nodet[0][index]->n_packets);
-	}
-	else if(PREDICT_FALSE(nodet[0][index]!=NULL && nodet[1][index]!=NULL)){
+    if(PREDICT_TRUE(nodet[0][index]!=NULL && nodet[1][index]!=NULL)){
 	if (nodet[0][index]->n_packets > 0)
 	cost->costip4 = ( WEIGHT_IP4/((WEIGHT_IP4*nodet[0][index]->n_packets)+(WEIGHT_IP6*nodet[1][index]->n_packets)) )*s_total[index];
 	if (nodet[1][index]->n_packets > 0)
 	cost->costip6 = ( WEIGHT_IP6/((WEIGHT_IP4*nodet[0][index]->n_packets)+(WEIGHT_IP6*nodet[1][index]->n_packets)) )*s_total[index];
 	}
+    else if(PREDICT_TRUE(nodet[0][index]!=NULL && nodet[1][index]==NULL)){
+	if (nodet[0][index]->n_packets > 0)
+	cost->costip4 = (s_total[index]/nodet[0][index]->n_packets);
+	}
+	else if(nodet[0][index]==NULL && nodet[1][index]!=NULL)
+		cost->costip6 = (s_total[index]/nodet[1][index]->n_packets);
 }
 
 /*function to increment vqueues using the updated costs*/
