@@ -47,6 +47,7 @@
 #include <plugins/dpdk/device/flow_table_cpu.h>
 #include <plugins/dpdk/device/flow_table_var.h>
 
+
 CJ_GLOBAL_LOG_PROTOTYPE;
 
 /* Actually allocate a few extra slots of vector data to support
@@ -1473,6 +1474,7 @@ vlib_main_or_worker_loop (vlib_main_t * vm, int is_main)
 
   while (1)
     {
+	s[os_get_cpu_number()] = clib_cpu_time_now ();
       vlib_node_runtime_t *n;
 
       if (!is_main)
@@ -1590,13 +1592,6 @@ vlib_main_or_worker_loop (vlib_main_t * vm, int is_main)
       for (i = 0; i < _vec_len (nm->pending_frames); i++)
 	cpu_time_now = dispatch_pending_node (vm, nm->pending_frames + i,
 					      cpu_time_now);
-
-		/* For fairdrop
-		u32 cpu_index = os_get_cpu_number();
-		update_costs(vm,cpu_index);
-      	update_vstate(vm,cpu_index);
-      	old_t[cpu_index] = t[cpu_index];
-*/
       /* Reset pending vector for next iteration. */
       _vec_len (nm->pending_frames) = 0;
 
@@ -1609,6 +1604,8 @@ vlib_main_or_worker_loop (vlib_main_t * vm, int is_main)
       /* Record time stamp in case there are no enabled nodes and above
          calls do not update time stamp. */
       cpu_time_now = clib_cpu_time_now ();
+	s_total[os_get_cpu_number()] = cpu_time_now-s[os_get_cpu_number()];
+	//clib_warning("%lu\n",s_total[os_get_cpu_number()]);
     }
 }
 

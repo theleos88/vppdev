@@ -13,23 +13,15 @@
 #include <math.h>
 #ifndef FLOW_TABLE_H
 #define FLOW_TABLE_H
-#define TABLESIZE 4096
-#define ALPHA 0.4   // ALPHA = Output/Input
-#define ALPHACPU 1.0   // ALPHA = Output/Input
-
-#define FIXED_CREDITS   (4000)
-
-
-//#define BETA 0.1    // BETA = Output/Input
-//#define BUFFER 38400000 //just a random number. Update the value with proper theoritical approach.
+#define ALPHACPU 1   // ALPHA = Output/Input
 #define THRESHOLD 128000 //81920 //just a random number. Update the value with proper theoritical approach.
 
-/*Node in the flow table. srcdst is 64 bit divided as |32bitsrcip|32bitdstip| ; swsrcdstport is divided as |32bit swifindex|16bit srcport|16bit dstport|*/
+#define WEIGHT_IP4	320
+#define WEIGHT_IP6	417
+
 typedef struct flowcount{
     u32 n_packets;
     u32 vqueue;
-//    struct flowcount * branchnext;
-//    struct flowcount * update;
 }flowcount_t;
 
 typedef struct activelist{
@@ -122,6 +114,8 @@ extern u32 nbl[24];
 extern u64 t[24];
 extern u64 old_t[24];
 extern u8 hello_world[24];
+extern u64 s[24];
+extern u64 s_total[24];
 /* Flow classification function */
 always_inline flowcount_t *
 flow_table_classify(u8 modulox,u32 cpu_index){
@@ -230,99 +224,22 @@ always_inline u8 fq (u8 modulox,u32 cpu_index){
 /*Function to update costs*/
 always_inline void update_costs(vlib_main_t *vm,u32 index){
 
-    if (PREDICT_FALSE(hello_world[index]<=10)){
-        //hello_world[index]++;
 
     if(PREDICT_FALSE(costtable[index]==NULL)){
         costtable[index] = malloc(sizeof(costlen_t));
         memset(costtable[index], 0, sizeof (costlen_t));
     }
     costlen_t *cost = costtable[index];
-    if(PREDICT_FALSE(costpernode[index]==NULL)){
-        costpernode[index]=malloc(sizeof(costpernode_t));
-        memset(costpernode[index],0,sizeof(costpernode_t));
-    }
-    costpernode_t * cost_node = costpernode[index];
-
-    f64 costip4;
-    f64 costip6;
-    f64 dpdk,out,tx;
-    costip4 = costip6 = 0;
-
-    vlib_node_t *ip4_chain = vlib_get_node_by_name (vm, (u8 *) "dpdk-input");
-    vlib_node_sync_stats (vm, ip4_chain);
-    dpdk = (f64)(ip4_chain->stats_total.clocks - cost_node->inout.dpdk_input.clocks)/(f64)(ip4_chain->stats_total.vectors - cost_node->inout.dpdk_input.vectors);
-    costip4 += dpdk;
-    cost_node->inout.dpdk_input.clocks = ip4_chain->stats_total.clocks;
-    cost_node->inout.dpdk_input.vectors = ip4_chain->stats_total.vectors;
-
-    ip4_chain = vlib_get_node_by_name (vm, (u8 *) "ip4-input-no-checksum");
-    vlib_node_sync_stats (vm, ip4_chain);
-    costip4 += (f64)(ip4_chain->stats_total.clocks - cost_node->ip4.ip4_input_no_checksum.clocks)/(f64)(ip4_chain->stats_total.vectors - cost_node->ip4.ip4_input_no_checksum.vectors);
-    cost_node->ip4.ip4_input_no_checksum.clocks = ip4_chain->stats_total.clocks;
-    cost_node->ip4.ip4_input_no_checksum.vectors = ip4_chain->stats_total.vectors;
-
-    ip4_chain = vlib_get_node_by_name (vm, (u8 *) "ip4-load-balance");
-    vlib_node_sync_stats (vm, ip4_chain);
-    costip4 += (f64)(ip4_chain->stats_total.clocks - cost_node->ip4.ip4_load_balance.clocks)/(f64)(ip4_chain->stats_total.vectors - cost_node->ip4.ip4_load_balance.vectors);
-    cost_node->ip4.ip4_load_balance.clocks = ip4_chain->stats_total.clocks;
-    cost_node->ip4.ip4_load_balance.vectors = ip4_chain->stats_total.vectors;
-
-    ip4_chain = vlib_get_node_by_name (vm, (u8 *) "ip4-lookup");
-    vlib_node_sync_stats (vm, ip4_chain);
-    costip4 += (f64)(ip4_chain->stats_total.clocks - cost_node->ip4.ip4_lookup.clocks)/(f64)(ip4_chain->stats_total.vectors - cost_node->ip4.ip4_lookup.vectors);
-    cost_node->ip4.ip4_lookup.clocks = ip4_chain->stats_total.clocks;
-    cost_node->ip4.ip4_lookup.vectors = ip4_chain->stats_total.vectors;
-
-    ip4_chain = vlib_get_node_by_name (vm, (u8 *) "ip4-rewrite");
-    vlib_node_sync_stats (vm, ip4_chain);
-    costip4 += (f64)(ip4_chain->stats_total.clocks - cost_node->ip4.ip4_rewrite.clocks)/(f64)(ip4_chain->stats_total.vectors - cost_node->ip4.ip4_rewrite.vectors);
-    cost_node->ip4.ip4_rewrite.clocks = ip4_chain->stats_total.clocks;
-    cost_node->ip4.ip4_rewrite.vectors = ip4_chain->stats_total.vectors;
-
-    ip4_chain = vlib_get_node_by_name (vm, (u8 *) "TenGigabitEthernet84/0/1-output");
-    vlib_node_sync_stats (vm, ip4_chain);
-    out = (f64)(ip4_chain->stats_total.clocks - cost_node->inout.tge_output.clocks)/(f64)(ip4_chain->stats_total.vectors - cost_node->inout.tge_output.vectors);
-    costip4 += out;
-    cost_node->inout.tge_output.clocks = ip4_chain->stats_total.clocks;
-    cost_node->inout.tge_output.vectors = ip4_chain->stats_total.vectors;
-
-    ip4_chain = vlib_get_node_by_name (vm, (u8 *) "TenGigabitEthernet84/0/1-tx");
-    vlib_node_sync_stats (vm, ip4_chain);
-    tx = (f64)(ip4_chain->stats_total.clocks - cost_node->inout.tge_tx.clocks)/(f64)(ip4_chain->stats_total.vectors - cost_node->inout.tge_tx.vectors);
-    costip4 += tx;
-    cost_node->inout.tge_tx.clocks = ip4_chain->stats_total.clocks;
-    cost_node->inout.tge_tx.vectors = ip4_chain->stats_total.vectors;
-
-    costip6 += dpdk+out+tx;
-    vlib_node_t *ip6_chain = vlib_get_node_by_name (vm, (u8 *) "ip6-input");
-    vlib_node_sync_stats (vm, ip6_chain);
-    costip6 += (f64)(ip6_chain->stats_total.clocks - cost_node->ip6.ip6_input.clocks)/(f64)(ip6_chain->stats_total.vectors - cost_node->ip6.ip6_input.vectors);
-    cost_node->ip6.ip6_input.clocks = ip6_chain->stats_total.clocks;
-    cost_node->ip6.ip6_input.vectors = ip6_chain->stats_total.vectors;
-
-    ip6_chain = vlib_get_node_by_name (vm, (u8 *) "ip6-lookup");
-    vlib_node_sync_stats (vm, ip6_chain);
-    costip6 += (f64)(ip6_chain->stats_total.clocks - cost_node->ip6.ip6_lookup.clocks)/(f64)(ip6_chain->stats_total.vectors - cost_node->ip6.ip6_lookup.vectors);
-    cost_node->ip6.ip6_lookup.clocks = ip6_chain->stats_total.clocks;
-    cost_node->ip6.ip6_lookup.vectors = ip6_chain->stats_total.vectors;
-
-    ip6_chain = vlib_get_node_by_name (vm, (u8 *) "ip6-rewrite");
-    vlib_node_sync_stats (vm, ip6_chain);
-    costip6 += (f64)(ip6_chain->stats_total.clocks - cost_node->ip6.ip6_rewrite.clocks)/(f64)(ip6_chain->stats_total.vectors - cost_node->ip6.ip6_rewrite.vectors);
-    cost_node->ip6.ip6_rewrite.clocks = ip6_chain->stats_total.clocks;
-    cost_node->ip6.ip6_rewrite.vectors = ip6_chain->stats_total.vectors;
-
-    ip6_chain = vlib_get_node_by_name (vm, (u8 *) "interface-output");
-    vlib_node_sync_stats (vm, ip6_chain);
-    costip6 += (f64)(ip6_chain->stats_total.clocks - cost_node->ip6.interface_output.clocks)/(f64)(ip6_chain->stats_total.vectors - cost_node->ip6.interface_output.vectors);
-    cost_node->ip6.interface_output.clocks = ip6_chain->stats_total.clocks;
-    cost_node->ip6.interface_output.vectors = ip6_chain->stats_total.vectors;
-
-    cost->costip4 = costip4;
-    cost->costip6 = costip6;
-    }
-	hello_world[index]++;
+	if(PREDICT_FALSE(nodet[0][index]!=NULL && nodet[1][index]!=NULL)){
+	if (nodet[0][index]->n_packets > 0)
+	cost->costip4 = ( WEIGHT_IP4/((WEIGHT_IP4*nodet[0][index]->n_packets)+(WEIGHT_IP6*nodet[1][index]->n_packets)) )*s_total[index];
+	if (nodet[1][index]->n_packets > 0)
+	cost->costip6 = ( WEIGHT_IP6/((WEIGHT_IP4*nodet[0][index]->n_packets)+(WEIGHT_IP6*nodet[1][index]->n_packets)) )*s_total[index];
+	}
+    else if(PREDICT_TRUE(nodet[0][index]!=NULL && nodet[1][index]==NULL)){
+	if (nodet[0][index]->n_packets > 0)
+	cost->costip4 = (s_total[index]/nodet[0][index]->n_packets);
+	}
 }
 
 /*function to increment vqueues using the updated costs*/

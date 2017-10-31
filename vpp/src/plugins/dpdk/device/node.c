@@ -34,8 +34,8 @@
 #include <vppinfra/elog.h>
 
 
-#define WEIGHT_IP   320 
-#define WEIGHT_IP6  416 
+//#define WEIGHT_IP   320
+//#define WEIGHT_IP6  416
 #define WEIGHT_L2   (224)
 #define DEFAULT_CREDIT (80000)
 #define HELLO 1
@@ -364,6 +364,7 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
       u8 modulo0,modulo1,modulo2,modulo3;
       u8 first=1;
     //u8 initfirst=1;
+	  //printf("%lu\n",s_total[cpu_index]);
       update_costs(vm,cpu_index);
       update_vstate(vm,cpu_index);
       old_t[cpu_index] = t[cpu_index];
