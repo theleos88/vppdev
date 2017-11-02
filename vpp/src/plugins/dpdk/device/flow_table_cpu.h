@@ -13,8 +13,8 @@
 #include <math.h>
 #ifndef FLOW_TABLE_H
 #define FLOW_TABLE_H
-#define ALPHACPU 0.7
-#define THRESHOLD 128000 //81920 //just a random number. Update the value with proper theoritical approach.
+#define ALPHACPU 1.0
+#define THRESHOLD 128000
 
 #define WEIGHT_IP4	320
 #define WEIGHT_IP6	417
@@ -116,7 +116,8 @@ extern u64 old_t[24];
 extern u8 hello_world[24];
 extern u64 s[24];
 extern u64 s_total[24];
-/* Flow classification function */
+
+/* Flow/class classification function */
 always_inline flowcount_t *
 flow_table_classify(u8 modulox,u32 cpu_index){
 
@@ -166,7 +167,7 @@ always_inline void vstate(flowcount_t * flow,u8 update,u32 cpu_index){
         flowcount_t * j;
         f32 served,credit;
         int oldnbl=nbl[cpu_index]+1;
-        credit = ((t[cpu_index]-old_t[cpu_index])*ALPHACPU);///(2.6);
+        credit = ((t[cpu_index]-old_t[cpu_index])*ALPHACPU);
         while (oldnbl>nbl[cpu_index] && nbl[cpu_index] > 0){
             oldnbl = nbl[cpu_index];
             served = credit/(nbl[cpu_index]);
@@ -192,7 +193,6 @@ always_inline void vstate(flowcount_t * flow,u8 update,u32 cpu_index){
             flowin(flow,cpu_index);
 			flow->vqueue = 1;
         }
-        //flow->vqueue += pktlenx;
 		flow->n_packets++;
     }
 }
@@ -200,15 +200,12 @@ always_inline void vstate(flowcount_t * flow,u8 update,u32 cpu_index){
 /* arrival function for each packet */
 always_inline u8 arrival(flowcount_t * flow,u32 cpu_index){
 u8 drop;
-    //printf("%d\n",flow->vqueue);
     if(flow->vqueue <= THRESHOLD /*&& r_qtotal < BUFFER*/){
         vstate(flow,0,cpu_index);
-        //r_qtotal += pktlenx;
         drop = 0;
     }
     else {
         drop = 1;
-        //update vstate is only after a vector. So no update before dropping a packet here.
     }
 return drop;
 }
@@ -230,18 +227,35 @@ always_inline void update_costs(vlib_main_t *vm,u32 index){
         memset(costtable[index], 0, sizeof (costlen_t));
     }
     costlen_t *cost = costtable[index];
-    if(PREDICT_TRUE(nodet[0][index]!=NULL && nodet[1][index]!=NULL)){
-	if (nodet[0][index]->n_packets > 0)
-	cost->costip4 = ( WEIGHT_IP4/((WEIGHT_IP4*nodet[0][index]->n_packets)+(WEIGHT_IP6*nodet[1][index]->n_packets)) )*s_total[index];
-	if (nodet[1][index]->n_packets > 0)
-	cost->costip6 = ( WEIGHT_IP6/((WEIGHT_IP4*nodet[0][index]->n_packets)+(WEIGHT_IP6*nodet[1][index]->n_packets)) )*s_total[index];
+
+    if(nodet[0][index]!=NULL && nodet[1][index]!=NULL){
+		if (nodet[0][index]->n_packets > 0){
+			cost->costip4 =  ((f64)(WEIGHT_IP4*s_total[index]))/((f64)((WEIGHT_IP4*nodet[0][index]->n_packets)+(WEIGHT_IP6*nodet[1][index]->n_packets)));
+			//printf("%lf\t",cost->costip4);
+		}
+		else
+            cost->costip4 = 0;
+		if (nodet[1][index]->n_packets > 0){
+			cost->costip6 =  ((f64)(WEIGHT_IP6*s_total[index]))/((f64)((WEIGHT_IP4*nodet[0][index]->n_packets)+(WEIGHT_IP6*nodet[1][index]->n_packets)));
+			//printf("%lf\n",cost->costip6);
+		}
+		else
+            cost->costip6 = 0;
 	}
-    else if(PREDICT_TRUE(nodet[0][index]!=NULL && nodet[1][index]==NULL)){
-	if (nodet[0][index]->n_packets > 0)
-	cost->costip4 = (s_total[index]/nodet[0][index]->n_packets);
+    else if(nodet[0][index]!=NULL && nodet[1][index]==NULL){
+		if (nodet[0][index]->n_packets > 0){
+			cost->costip4 = (s_total[index]/nodet[0][index]->n_packets);
+			//printf("%lf\t",cost->costip4);
+		}
+		else
+			cost->costip4 = 0;
 	}
-	else if(nodet[0][index]==NULL && nodet[1][index]!=NULL)
-		cost->costip6 = (s_total[index]/nodet[1][index]->n_packets);
+	else if(nodet[0][index]==NULL && nodet[1][index]!=NULL){
+		if (nodet[1][index]->n_packets > 0)
+			cost->costip6 = (s_total[index]/nodet[1][index]->n_packets);
+		else
+            cost->costip6 = 0;
+	}
 }
 
 /*function to increment vqueues using the updated costs*/
@@ -257,7 +271,6 @@ always_inline void update_vstate(vlib_main_t * vm,u32 index){
     }
 }
 
-/*vstate update function before sending the vector. This function is after processing all the packets in the vector and runs only once per vector */
 always_inline void departure (u32 cpu_index){
     vstate(NULL,1,cpu_index);
 }
