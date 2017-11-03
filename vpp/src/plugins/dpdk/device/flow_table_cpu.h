@@ -14,7 +14,7 @@
 #ifndef FLOW_TABLE_H
 #define FLOW_TABLE_H
 #define ALPHACPU 1.0
-#define THRESHOLD 128000
+#define THRESHOLD 1280000
 
 #define WEIGHT_IP4	320
 #define WEIGHT_IP6	417
@@ -245,7 +245,7 @@ always_inline void update_costs(vlib_main_t *vm,u32 index){
     else if(nodet[0][index]!=NULL && nodet[1][index]==NULL){
 		if (nodet[0][index]->n_packets > 0){
 			cost->costip4 = (s_total[index]/nodet[0][index]->n_packets);
-			//printf("%lf\t",cost->costip4);
+			//printf("Hello:%lf\t",cost->costip4);
 		}
 		else
 			cost->costip4 = 0;
