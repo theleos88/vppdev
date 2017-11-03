@@ -23,6 +23,7 @@ vpp/tools/
 
 # Autotools
 */*/autom4te.cache/
+m4
 vpp/config/
 Makefile
 Makefile.in
