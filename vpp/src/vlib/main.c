@@ -43,6 +43,8 @@
 #include <vlib/threads.h>
 
 #include <vlib/unix/cj.h>
+//Leonardo
+#include <sched.h>
 
 CJ_GLOBAL_LOG_PROTOTYPE;
 
@@ -1458,6 +1460,44 @@ vlib_main_or_worker_loop (vlib_main_t * vm, int is_main)
 
       nm->current_process_index = ~0;
     }
+
+
+  /* Leonardo: Check the scheduling policy */
+ if (is_main)
+  {
+
+  struct sched_param sp;
+  sched_getparam(0, &sp);
+  sp.sched_priority = sched_get_priority_max(SCHED_RR);
+  const struct sched_param *param = &sp;
+  if(sched_setscheduler(0,SCHED_RR, param) != 0){
+     perror("Error, errno:\n");
+  }
+
+
+
+      switch(sched_getscheduler(0)){
+              case SCHED_FIFO:
+                      clib_warning("Sched FIFO");
+                      break;
+              case SCHED_RR:
+                      clib_warning("Sched RR");
+                      break;
+              case SCHED_OTHER:
+                      clib_warning("Sched Other");
+                      break;
+              default:
+                      clib_warning("Unkwnown");
+      }
+
+
+
+    //set_scheduling_policy_and_affinity(os_get_cpu_number());
+  }
+
+
+
+
 
   /* Start all processes. */
   if (is_main)

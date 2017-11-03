@@ -27,6 +27,7 @@
 #include <vnet/feature/feature.h>
 
 #include <dpdk/device/dpdk_priv.h>
+#include <unistd.h>
 
 static char *dpdk_error_strings[] = {
 #define _(n,s) s,
@@ -632,6 +633,10 @@ dpdk_input (vlib_main_t * vm, vlib_node_runtime_t * node, vlib_frame_t * f)
   dpdk_device_and_queue_t *dq;
   u32 cpu_index = os_get_cpu_number ();
 
+  // Rate limit here:
+  usleep(10);
+
+
   /*
    * Poll all devices on this cpu for input/interrupts.
    */
@@ -646,7 +651,7 @@ dpdk_input (vlib_main_t * vm, vlib_node_runtime_t * node, vlib_frame_t * f)
     }
   /* *INDENT-ON* */
 
-  poll_rate_limit (dm);
+  //poll_rate_limit (dm);
 
   return n_rx_packets;
 }
