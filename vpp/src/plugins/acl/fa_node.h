@@ -63,8 +63,7 @@ typedef struct {
   u8 reserved1;           /* +1 bytes = 64 */
   u32 link_prev_idx;
   u32 link_next_idx;
-  u64 link_enqueue_time;
-  u64 reserved2[6];
+  u64 reserved2[7];
 } fa_session_t;
 
 

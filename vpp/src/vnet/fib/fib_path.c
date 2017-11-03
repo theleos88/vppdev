@@ -1634,11 +1634,7 @@ fib_path_get_resolving_interface (fib_node_index_t path_index)
     case FIB_PATH_TYPE_RECEIVE:
 	return (path->receive.fp_interface);
     case FIB_PATH_TYPE_RECURSIVE:
-        if (fib_path_is_resolved(path_index))
-        {
-            return (fib_entry_get_resolving_interface(path->fp_via_fib));
-        }
-        break;
+	return (fib_entry_get_resolving_interface(path->fp_via_fib));    
     case FIB_PATH_TYPE_SPECIAL:
     case FIB_PATH_TYPE_DEAG:
     case FIB_PATH_TYPE_EXCLUSIVE:
@@ -1702,15 +1698,7 @@ fib_path_contribute_urpf (fib_node_index_t path_index,
 	break;
 
     case FIB_PATH_TYPE_RECURSIVE:
-        if (FIB_NODE_INDEX_INVALID != path->fp_via_fib &&
-	    !fib_path_is_looped(path_index))
-        {
-            /*
-             * there's unresolved due to constraints, and there's unresolved
-             * due to ain't got no via. can't do nowt w'out via.
-             */
-            fib_entry_contribute_urpf(path->fp_via_fib, urpf);
-        }
+	fib_entry_contribute_urpf(path->fp_via_fib, urpf);
 	break;
 
     case FIB_PATH_TYPE_EXCLUSIVE:

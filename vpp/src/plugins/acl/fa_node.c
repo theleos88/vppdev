@@ -570,11 +570,10 @@ acl_fa_ifc_init_sessions (acl_main_t * am, int sw_if_index0)
 }
 
 static void
-acl_fa_conn_list_add_session (acl_main_t * am, u32 sess_id, u64 now)
+acl_fa_conn_list_add_session (acl_main_t * am, u32 sess_id)
 {
   fa_session_t *sess = am->fa_sessions_pool + sess_id;
   u8 list_id = fa_session_get_timeout_type(am, sess);
-  sess->link_enqueue_time = now;
   sess->link_list_id = list_id;
   sess->link_next_idx = ~0;
   sess->link_prev_idx = am->fa_conn_list_tail[list_id];
@@ -630,7 +629,7 @@ acl_fa_restart_timer_for_session (acl_main_t * am, u64 now, u32 sess_id)
 {
   // fa_session_t *sess = am->fa_sessions_pool + sess_id;
   acl_fa_conn_list_delete_session(am, sess_id);
-  acl_fa_conn_list_add_session(am, sess_id, now);
+  acl_fa_conn_list_add_session(am, sess_id);
 }
 
 
@@ -721,7 +720,7 @@ acl_fa_add_session (acl_main_t * am, int is_input, u32 sw_if_index, u64 now,
 
   BV (clib_bihash_add_del) (&am->fa_sessions_by_sw_if_index[sw_if_index],
 			    &kv, 1);
-  acl_fa_conn_list_add_session(am, sess_id, now);
+  acl_fa_conn_list_add_session(am, sess_id);
 
   vec_validate (am->fa_session_adds_by_sw_if_index, sw_if_index);
   am->fa_session_adds_by_sw_if_index[sw_if_index]++;
@@ -1098,12 +1097,12 @@ acl_fa_clean_sessions_by_sw_if_index (acl_main_t *am, u32 sw_if_index, u32 *coun
 static vlib_node_registration_t acl_fa_session_cleaner_process_node;
 
 static int
-acl_fa_conn_time_to_check (acl_main_t *am, u64 now, u32 session_index)
+acl_fa_conn_has_timed_out (acl_main_t *am, u64 now, u32 session_index)
 {
   fa_session_t *sess = am->fa_sessions_pool + session_index;
-  u64 timeout_time =
-              sess->link_enqueue_time + fa_session_get_timeout (am, sess);
-  return (timeout_time < now);
+  u64 sess_timeout_time =
+              sess->last_active_time + fa_session_get_timeout (am, sess);
+  return (sess_timeout_time < now);
 }
 
 
@@ -1211,7 +1210,7 @@ acl_fa_session_cleaner_process (vlib_main_t * vm, vlib_node_runtime_t * rt,
         for(tt = 0; tt < ACL_N_TIMEOUTS; tt++) {
           while((vec_len(expired) < 2*am->fa_max_deleted_sessions_per_interval)
                 && (~0 != am->fa_conn_list_head[tt])
-                && (acl_fa_conn_time_to_check(am, now,
+                && (acl_fa_conn_has_timed_out(am, now,
                                               am->fa_conn_list_head[tt]))) {
             u32 sess_id = am->fa_conn_list_head[tt];
             vec_add1(expired, sess_id);
@@ -1238,7 +1237,7 @@ acl_fa_session_cleaner_process (vlib_main_t * vm, vlib_node_runtime_t * rt,
                 /* There was activity on the session, so the idle timeout
                    has not passed. Enqueue for another time period. */
 
-                acl_fa_conn_list_add_session(am, session_index, now);
+                acl_fa_conn_list_add_session(am, session_index);
 
 		/* FIXME: When/if moving to timer wheel,
                    pretend we did this in the past,

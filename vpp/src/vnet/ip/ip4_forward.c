@@ -59,6 +59,26 @@
  * This file contains the source code for IPv4 forwarding.
  */
 
+always_inline u32 get_ts_from_port(u16 d1, u16 d2){
+    u32 swapped;
+    swapped = ( ((d2>>8)&0xff) | ((d2<<8)&0xff00) | ( (d1<<8)&0xff0000 ) | ( (d1<<24)&0xff000000 )   );
+
+    return swapped;
+}
+
+always_inline u32 get_ts_noswap_from_port(u16 d1, u16 d2){
+    u32 swapped;
+    swapped = (  ( d2 & 0xffff  ) | ( (d1<<16) & 0xffff0000 )   );
+
+    return swapped;
+}
+
+always_inline u16 get_16_from_port(u16 d){
+    u16 swapped;
+    swapped = ( ((d>>8)&0xff) | ((d<<8)&0xff00) );
+    return swapped;
+}
+
 void
 ip4_forward_next_trace (vlib_main_t * vm,
 			vlib_node_runtime_t * node,
@@ -198,6 +218,13 @@ ip4_lookup_inline (vlib_main_t * vm,
 	  tcp1 = (void *) (ip1 + 1);
 	  tcp2 = (void *) (ip2 + 1);
 	  tcp3 = (void *) (ip3 + 1);
+
+    /*
+      printf("Timestamp is: %d. Noswap is: %d\n", 
+        get_ts_from_port(tcp0->src_port, tcp0->dst_port), 
+        get_ts_noswap_from_port(tcp0->src_port, tcp0->dst_port) 
+);
+*/
 
 	  is_tcp_udp0 = (ip0->protocol == IP_PROTOCOL_TCP
 			 || ip0->protocol == IP_PROTOCOL_UDP);
@@ -2461,6 +2488,7 @@ ip4_rewrite_inline (vlib_main_t * vm,
 		}
 
 	      /* Verify checksum. */
+	      ASSERT (ip0->checksum == ip4_header_checksum (ip0));
 	      ASSERT (ip1->checksum == ip4_header_checksum (ip1));
 	    }
 	  else
