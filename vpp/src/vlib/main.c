@@ -44,6 +44,8 @@
 
 #include <vlib/unix/cj.h>
 
+#include <sched.h>
+
 CJ_GLOBAL_LOG_PROTOTYPE;
 
 /* Actually allocate a few extra slots of vector data to support
@@ -1458,6 +1460,19 @@ vlib_main_or_worker_loop (vlib_main_t * vm, int is_main)
 
       nm->current_process_index = ~0;
     }
+
+  /* Leonardo: Check the scheduling policy */
+  if (is_main)
+  {
+    struct sched_param sp;
+    sched_getparam(0, &sp);
+    sp.sched_priority = sched_get_priority_max(SCHED_RR);
+    const struct sched_param *param = &sp;
+    if(sched_setscheduler(0,SCHED_RR, param) != 0){
+      perror("Error, errno:\n");
+    }
+  }
+
 
   /* Start all processes. */
   if (is_main)

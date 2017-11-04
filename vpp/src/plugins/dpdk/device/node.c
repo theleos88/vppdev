@@ -29,10 +29,13 @@
 
 #include <dpdk/device/dpdk_priv.h>
 #include "generic/rte_cycles.h" //Leonardo, for rdtsc()
-
-//#include <vlib/vlib.h>  //Leonardo
-//#include <time.h>
-
+///////////////////////////////////////////////////////////
+#define ENABLE_USLEEP	1
+#ifdef ENABLE_USLEEP
+#include <sched.h>
+#include <unistd.h>
+#endif
+////////////////////////////////////////////////////////
 
 static char *dpdk_error_strings[] = {
 #define _(n,s) s,
@@ -641,6 +644,11 @@ dpdk_input (vlib_main_t * vm, vlib_node_runtime_t * node, vlib_frame_t * f)
   //Leonardo
   u64 clk;
 
+  /* Perform a rate limit here! Leos*/
+  #ifdef ENABLE_SLEEP
+  usleep(10);
+  #endif
+
   /*
    * Poll all devices on this cpu for input/interrupts.
    */
@@ -655,7 +663,7 @@ dpdk_input (vlib_main_t * vm, vlib_node_runtime_t * node, vlib_frame_t * f)
     }
   /* *INDENT-ON* */
 
-  poll_rate_limit (dm);
+  //poll_rate_limit (dm);
 
   //Leonardo
   clk = rte_rdtsc();
