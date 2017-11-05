@@ -183,6 +183,10 @@ dpdk_rx_burst (dpdk_main_t * dm, dpdk_device_t * xd, u16 queue_id)
   n_left = VLIB_FRAME_SIZE;
   n_buffers = 0;
 
+  #ifdef ENABLE_USLEEP
+  usleep(15);
+  #endif
+
   if (PREDICT_TRUE (xd->flags & DPDK_DEVICE_FLAG_PMD))
     {
       while (n_left)
@@ -645,9 +649,9 @@ dpdk_input (vlib_main_t * vm, vlib_node_runtime_t * node, vlib_frame_t * f)
   u64 clk;
 
   /* Perform a rate limit here! Leos*/
-  #ifdef ENABLE_SLEEP
-  usleep(10);
-  #endif
+  //#ifdef ENABLE_USLEEP
+  //usleep(10);
+  //#endif
 
   /*
    * Poll all devices on this cpu for input/interrupts.
