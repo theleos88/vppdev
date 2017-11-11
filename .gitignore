@@ -23,6 +23,7 @@ vpp/tools/
 
 # Autotools
 */*/autom4te.cache/
+m4
 vpp/config/
 Makefile
 Makefile.in
@@ -75,7 +76,7 @@ vpp/build-root/.doxygen-siphon.dep
 *.BAK
 
 # Python
-**/*.pyc
+*.pyc
 vpp/src/vpp-api/python/build
 vpp/src/vpp-api/python/dist
 vpp/src/vpp-api/python/vpp_papi.egg-info
