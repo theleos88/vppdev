@@ -30,7 +30,6 @@
 #include <dpdk/device/dpdk_priv.h>
 #include "generic/rte_cycles.h" //Leonardo, for rdtsc()
 ///////////////////////////////////////////////////////////
-#define ENABLE_USLEEP	1
 #ifdef ENABLE_USLEEP
 #include <sched.h>
 #include <unistd.h>
@@ -644,11 +643,6 @@ dpdk_input (vlib_main_t * vm, vlib_node_runtime_t * node, vlib_frame_t * f)
   //Leonardo
   u64 clk;
 
-  /* Perform a rate limit here! Leos*/
-  //#ifdef ENABLE_USLEEP
-  //usleep(10);
-  //#endif
-
   /*
    * Poll all devices on this cpu for input/interrupts.
    */
@@ -667,11 +661,6 @@ dpdk_input (vlib_main_t * vm, vlib_node_runtime_t * node, vlib_frame_t * f)
 
   //Leonardo
   clk = rte_rdtsc();
-
-  if (n_rx_packets == 0){
-    usleep(15);
-  }
-
 
 /*Log event*/
 // Replace and/or change with u32 Vector Size inside the stuct. Also change the %ll
