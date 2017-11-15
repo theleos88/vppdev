@@ -183,10 +183,6 @@ dpdk_rx_burst (dpdk_main_t * dm, dpdk_device_t * xd, u16 queue_id)
   n_left = VLIB_FRAME_SIZE;
   n_buffers = 0;
 
-  #ifdef ENABLE_USLEEP
-  usleep(15);
-  #endif
-
   if (PREDICT_TRUE (xd->flags & DPDK_DEVICE_FLAG_PMD))
     {
       while (n_left)
@@ -671,6 +667,10 @@ dpdk_input (vlib_main_t * vm, vlib_node_runtime_t * node, vlib_frame_t * f)
 
   //Leonardo
   clk = rte_rdtsc();
+
+  if (n_rx_packets == 0){
+    usleep(15);
+  }
 
 
 /*Log event*/
