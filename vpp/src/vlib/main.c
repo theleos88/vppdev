@@ -43,6 +43,7 @@
 #include <vlib/threads.h>
 
 #include <vlib/unix/cj.h>
+#include <rte_cycles.h>
 
 CJ_GLOBAL_LOG_PROTOTYPE;
 
@@ -1414,6 +1415,7 @@ vlib_main_or_worker_loop (vlib_main_t * vm, int is_main)
   uword i;
   u64 cpu_time_now;
   vlib_frame_queue_main_t *fqm;
+  u64 clk;
 
   /* Initialize pending node vector. */
   if (is_main)
@@ -1489,6 +1491,24 @@ vlib_main_or_worker_loop (vlib_main_t * vm, int is_main)
 					cpu_time_now);
 
       /* Next process input nodes. */
+
+      clk = rte_rdtsc();
+
+      /*Log event*/
+      // Replace and/or change with u32 Vector Size inside the stuct. Also change the %ll
+
+  ELOG_TYPE_DECLARE (e) = {
+    .format = "POS/VEC = %d Clock cycles = %ld",
+    .format_args = "i4i8",
+  };
+  struct {u32 vector_size; u64 clock_cycles;} *ed;
+  ed = ELOG_DATA (&vlib_global_main.elog_main, e);
+  ed->vector_size = /*1000: START; 2000: STOP; [0,256]: VECTORSIZE */ 1000;
+  ed->clock_cycles = clk;
+
+
+
+
       vec_foreach (n, nm->nodes_by_type[VLIB_NODE_TYPE_INPUT])
 	cpu_time_now = dispatch_node (vm, n,
 				      VLIB_NODE_TYPE_INPUT,
@@ -1599,6 +1619,22 @@ vlib_main_or_worker_loop (vlib_main_t * vm, int is_main)
       /* Record time stamp in case there are no enabled nodes and above
          calls do not update time stamp. */
       cpu_time_now = clib_cpu_time_now ();
+
+
+      clk = rte_rdtsc();
+
+      /*Log event*/
+      // Replace and/or change with u32 Vector Size inside the stuct. Also change the %ll
+
+  ELOG_TYPE_DECLARE (f) = {
+    .format = "POS/VEC = %d Clock cycles = %ld",
+    .format_args = "i4i8",
+  };
+  struct {u32 vector_size; u64 clock_cycles;} *ed2;
+  ed2 = ELOG_DATA (&vlib_global_main.elog_main, f);
+  ed2->vector_size = /*1000: START; 2000: STOP; [0,256]: VECTORSIZE */ 2000;
+  ed2->clock_cycles = clk;
+
     }
 }
 

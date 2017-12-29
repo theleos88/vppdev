@@ -27,6 +27,9 @@
 #include <vnet/feature/feature.h>
 
 #include <dpdk/device/dpdk_priv.h>
+#include "generic/rte_cycles.h" /* For rte_rdtsc()*/
+
+extern vlib_main_t vlib_global_main;
 
 static char *dpdk_error_strings[] = {
 #define _(n,s) s,
@@ -631,6 +634,7 @@ dpdk_input (vlib_main_t * vm, vlib_node_runtime_t * node, vlib_frame_t * f)
   uword n_rx_packets = 0;
   dpdk_device_and_queue_t *dq;
   u32 cpu_index = os_get_cpu_number ();
+  u64 clk;
 
   /*
    * Poll all devices on this cpu for input/interrupts.
@@ -645,6 +649,21 @@ dpdk_input (vlib_main_t * vm, vlib_node_runtime_t * node, vlib_frame_t * f)
         n_rx_packets += dpdk_device_input (dm, xd, node, cpu_index, dq->queue_id, /* maybe_multiseg */ 0);
     }
   /* *INDENT-ON* */
+
+	/*Log event*/
+	// Replace and/or change with u32 Vector Size inside the stuct. Also change the %ll
+
+  //clib_warning("Print clk, %lu, size %d\n", clk, n_rx_packets );
+  clk = rte_rdtsc();
+
+  ELOG_TYPE_DECLARE (e) = {
+    .format = "POS/VEC = %d Clock cycles = %ld",
+    .format_args = "i4i8",
+  };
+  struct {u32 vector_size; u64 clock_cycles;} *ed;
+  ed = ELOG_DATA (&vlib_global_main.elog_main, e);
+  ed->vector_size = n_rx_packets;
+  ed->clock_cycles = clk;
 
   poll_rate_limit (dm);
 
