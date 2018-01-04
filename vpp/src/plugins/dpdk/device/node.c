@@ -660,6 +660,16 @@ dpdk_device_input (dpdk_main_t * dm, dpdk_device_t * xd,
 
   vnet_device_increment_rx_packets (cpu_index, mb_index);
 
+//	u64 t1,t2,t3;
+//	t1 = clib_cpu_time_now();
+//	t2 = clib_cpu_time_now();
+//	sleep_now(t[cpu_index],old_t[cpu_index]);
+//	t3 = clib_cpu_time_now();
+//	printf("%d\n",abs((t3-t2)-(t2-t1)));
+//	int abc=0;
+//	while(abc<1000000){
+//	abc++;
+//	}
   return mb_index;
 }
 

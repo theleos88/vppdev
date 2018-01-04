@@ -11,6 +11,7 @@
 #include <vnet/vnet.h>
 #include <stdlib.h>
 #include <math.h>
+#include <vppinfra/time.h>
 #ifndef FLOW_TABLE_H
 #define FLOW_TABLE_H
 #define ALPHACPU 1.0
@@ -275,6 +276,10 @@ always_inline void departure (u32 cpu_index){
     vstate(NULL,1,cpu_index);
 }
 
+always_inline void sleep_now (u64 t1,u64 old_t1){
+	u64 t_sleep = ((t1-old_t1)*(1-ALPHACPU));
+	clib_cpu_time_wait(t_sleep);
+}
 
 
 #endif /*FLOW_TABLE_H*/

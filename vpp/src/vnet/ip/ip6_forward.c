@@ -60,6 +60,10 @@
  * This file contains the source code for IPv6 forwarding.
  */
 
+always_inline void sleep_now (u64 t1){
+    clib_cpu_time_wait(t1);
+}
+
 void
 ip6_forward_next_trace (vlib_main_t * vm,
 			vlib_node_runtime_t * node,
@@ -83,6 +87,8 @@ ip6_lookup_inline (vlib_main_t * vm,
   while (n_left_from > 0)
     {
       vlib_get_next_frame (vm, node, next, to_next, n_left_to_next);
+
+	sleep_now((u64)(n_left_to_next*100));
 
       while (n_left_from >= 4 && n_left_to_next >= 2)
 	{
@@ -312,6 +318,7 @@ ip6_lookup_inline (vlib_main_t * vm,
 
       vlib_put_next_frame (vm, node, next, n_left_to_next);
     }
+
 
   if (node->flags & VLIB_NODE_FLAG_TRACE)
     ip6_forward_next_trace (vm, node, frame, VLIB_TX);

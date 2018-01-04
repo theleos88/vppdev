@@ -59,6 +59,12 @@
  * This file contains the source code for IPv4 forwarding.
  */
 
+/*
+always_inline void sleep_now (u64 t1){
+    clib_cpu_time_wait(t1);
+}
+*/
+
 void
 ip4_forward_next_trace (vlib_main_t * vm,
 			vlib_node_runtime_t * node,
@@ -2689,6 +2695,8 @@ ip4_rewrite_inline (vlib_main_t * vm,
 
       vlib_put_next_frame (vm, node, next_index, n_left_to_next);
     }
+
+//	sleep_now(2560);
 
   /* Need to do trace after rewrites to pick up new packet data. */
   if (node->flags & VLIB_NODE_FLAG_TRACE)
