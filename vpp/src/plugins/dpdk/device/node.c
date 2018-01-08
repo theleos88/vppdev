@@ -27,8 +27,14 @@
 #include <vnet/feature/feature.h>
 
 #include <dpdk/device/dpdk_priv.h>
-#include "generic/rte_cycles.h" /* For rte_rdtsc()*/
-
+#include "generic/rte_cycles.h" //Leonardo, for rdtsc()
+///////////////////////////////////////////////////////////
+#define ENABLE_USLEEP	1
+#ifdef ENABLE_USLEEP
+#include <sched.h>
+#include <unistd.h>
+#endif
+////////////////////////////////////////////////////////
 extern vlib_main_t vlib_global_main;
 
 static char *dpdk_error_strings[] = {
@@ -656,6 +662,15 @@ dpdk_input (vlib_main_t * vm, vlib_node_runtime_t * node, vlib_frame_t * f)
   //clib_warning("Print clk, %lu, size %d\n", clk, n_rx_packets );
   clk = rte_rdtsc();
 
+#ifdef ENABLE_USLEEP
+  if (n_rx_packets == 0){
+    usleep(10);
+  }
+#endif
+
+/*Log event*/
+// Replace and/or change with u32 Vector Size inside the stuct. Also change the %ll
+
   ELOG_TYPE_DECLARE (e) = {
     .format = "POS/VEC = %d Clock cycles = %ld",
     .format_args = "i4i8",
@@ -666,6 +681,7 @@ dpdk_input (vlib_main_t * vm, vlib_node_runtime_t * node, vlib_frame_t * f)
   ed->clock_cycles = clk;
 
   poll_rate_limit (dm);
+/*End of Log event*/
 
   return n_rx_packets;
 }
