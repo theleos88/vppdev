@@ -663,7 +663,7 @@ dpdk_input (vlib_main_t * vm, vlib_node_runtime_t * node, vlib_frame_t * f)
   clk = rte_rdtsc();
 
 #ifdef ENABLE_USLEEP
-  if (n_rx_packets == 0){
+  if (n_rx_packets < 32){
     usleep(10);
   }
 #endif
